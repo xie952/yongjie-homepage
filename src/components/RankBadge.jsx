@@ -24,40 +24,48 @@ const SIZES = {
   lg: { fontSize: 22, pad: '14px 34px', radius: 13, gap: 16, diamond: 26 }
 }
 
-export default function RankBadge({ rank, size = 'md' }) {
+export default function RankBadge({ rank, size = 'md', crest = null }) {
   const colors = RANK_MAP[rank] || RANK_MAP['青铜']
   const sz = SIZES[size] || SIZES.md
 
   return (
     <span
-      className="rank-badge"
+      className={`rank-badge${crest ? ' rank-badge--with-crest' : ''}`}
       style={{
         fontSize: sz.fontSize,
         padding: sz.pad,
         borderRadius: sz.radius,
-        gap: sz.gap,
-        // 主背景 + 顶部高光，营造金属质感
+        gap: crest ? 9 : sz.gap,
         background: `linear-gradient(180deg, ${colors.main} 0%, ${colors.sub} 100%)`,
         border: `1px solid ${colors.edge}`,
         boxShadow: `0 0 14px ${colors.edge}33, inset 0 1px 0 rgba(255,255,255,.28)`,
         color: '#0d0b09'
       }}
-      title={`当前段位：${rank}`}
+      title={`历史段位：${rank}`}
     >
-      {/* 段位菱形象征图形 */}
-      <svg
-        width={sz.diamond}
-        height={sz.diamond}
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-      >
-        <path
-          d="M12 2 L21 12 L12 22 L3 12 Z"
-          fill="rgba(255,255,255,.85)"
-          stroke="rgba(0,0,0,.25)"
-          strokeWidth="1.2"
+      {crest ? (
+        <img
+          className="rank-badge-crest"
+          src={crest}
+          alt=""
+          aria-hidden="true"
+          decoding="async"
         />
-      </svg>
+      ) : (
+        <svg
+          width={sz.diamond}
+          height={sz.diamond}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 2 L21 12 L12 22 L3 12 Z"
+            fill="rgba(255,255,255,.85)"
+            stroke="rgba(0,0,0,.25)"
+            strokeWidth="1.2"
+          />
+        </svg>
+      )}
       <span className="rank-badge-text">{rank}</span>
     </span>
   )

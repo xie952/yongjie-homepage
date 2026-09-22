@@ -36,11 +36,13 @@ export default function ContactSection() {
       </div>
 
       <div className="container closing-inner">
-        <p className="closing-kicker">— 江湖路远 · 后会有期 —</p>
-        <h2 className="closing-title">{closing.title}</h2>
-        <p className="closing-subtitle">{closing.subtitle}</p>
+        <div className="closing-head" data-reveal-group>
+          <p className="closing-kicker" data-reveal="up">— 江湖路远 · 后会有期 —</p>
+          <h2 className="closing-title" data-split>{closing.title}</h2>
+          <p className="closing-subtitle" data-reveal="up">{closing.subtitle}</p>
+        </div>
 
-        <div className="closing-contact">
+        <div className="closing-contact" data-reveal="up">
           <button className="btn btn-primary btn-lg" onClick={copyId} aria-live="polite">
             {copied ? '游戏ID已复制 ✓' : `复制游戏ID：${closing.contact.gameId}`}
           </button>

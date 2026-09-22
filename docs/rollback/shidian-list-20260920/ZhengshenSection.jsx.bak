@@ -1,0 +1,84 @@
+import ModeSection from './ModeSection'
+import StatCard from './StatCard'
+import { zhengshen } from '../data/stats'
+
+/**
+ * 征神之路版块（PVE 刷本）：
+ * - 征神等级 / 十殿门层数（1-20）/ 对局数量 / 英雄印数 / 成就数
+ * - 常用英雄 + 魂玉搭配卡片
+ */
+
+// 十殿门展示映射：历史最高层级（全站口径为历史最高，非当前）
+const SHIDIAN_MAX = 20
+
+export default function ZhengshenSection() {
+  const d = zhengshen
+  const stage = d.shidianStage || '神伐'
+  const layer = d.shidianLayer
+
+  return (
+    <ModeSection id="zhengshen" no="03" title="征神之路" en="ZHENSHEN" lead={d.intro}>
+
+      {/* 核心进度：等级 + 十殿门（作为卡片组层叠入场） */}
+      <div className="zhengshen-progress" data-reveal-group>
+        <div className="zs-progress-card zs-level">
+          <span className="zs-label">征神等级</span>
+          <span className="zs-big" data-count={d.level}>{d.level}</span>
+        </div>
+
+        <div className="zs-progress-card zs-shidian">
+          <div className="zs-shidian-head">
+            <span className="zs-label">十殿门 · 历史最高</span>
+            <span className="zs-shidian-num">
+              <span className="zs-shidian-stage">{stage} {layer}层</span>
+              <span className="zs-shidian-sub">/ {SHIDIAN_MAX}</span>
+            </span>
+          </div>
+          {/* 历史最高进度：1–20 层格子，已达到亮起 */}
+          <div
+            className="zs-shidian-track"
+            role="img"
+            aria-label={`十殿门历史最高：${stage} 第 ${layer} 层`}
+          >
+            {Array.from({ length: SHIDIAN_MAX }, (_, i) => (
+              <span
+                key={i}
+                className={`zs-layer${i < layer ? ' is-done' : ''}${i === layer - 1 ? ' is-current' : ''}`}
+                title={`${i + 1}`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 数量指标：层叠错峰 */}
+      <div className="stat-grid" data-reveal-group>
+        <StatCard label="对局数量" value={d.matches} />
+        <StatCard label="英雄印" value={d.seals} />
+        <StatCard label="成就" value={d.achievements} />
+      </div>
+
+      {/* 英雄 + 魂玉搭配卡片 */}
+      <h4 className="loadout-title" data-reveal="up">常用英雄 · 魂玉搭配</h4>
+      <div className="card-grid card-grid--3" data-reveal-group>
+        {d.heroBuilds.map((hb) => (
+          <article key={hb.name} className="build-card">
+            <div className="build-card-head">
+              <span className="build-card-avatar" aria-hidden="true">{hb.name.slice(0, 1)}</span>
+              <div>
+                <h4 className="build-card-name">{hb.name}</h4>
+                <span className="build-card-flow">{hb.build}</span>
+              </div>
+            </div>
+            <div className="jade-row">
+              {hb.jades.map((j) => (
+                <span key={j} className="jade-chip">{j}</span>
+              ))}
+            </div>
+            <p className="build-card-note">{hb.note}</p>
+          </article>
+        ))}
+      </div>
+    </ModeSection>
+  )
+}

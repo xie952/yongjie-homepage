@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import ModeSection from './ModeSection'
 import RankBadge from './RankBadge'
 import { player } from '../data/stats'
@@ -8,15 +9,37 @@ import { player } from '../data/stats'
  * - 右侧：游戏ID + 段位徽章 + 简介 + 时长/入坑 + 常用英雄色块 + 常用武器 + 社交入口
  */
 export default function Profile() {
+  const [weaponModal, setWeaponModal] = useState(null) // { name, media } | null
+
+  const openWeapon = (w) => setWeaponModal({ name: w.name, media: w.media || null })
+  const closeWeapon = () => setWeaponModal(null)
+  const isVideo = weaponModal?.media && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(weaponModal.media)
+
+  useEffect(() => {
+    if (!weaponModal) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') setWeaponModal(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [weaponModal])
+
   return (
     <ModeSection id="profile" no="01" title="玩家档案" en="PLAYER ARCHIVE"
       lead={`服务器 ${player.server} · 入坑 ${player.joinDate}`}>
 
       <div className="profile-grid">
-        {/* —— 左：头像/立绘占位 —— */}
-        <div className="profile-portrait">
+        {/* —— 左：段位纹章（heroPortrait）/ 无图时剪影占位 —— */}
+        <div className="profile-portrait" data-reveal="card">
           {player.heroPortrait ? (
-            <img src={player.heroPortrait} alt={`${player.id} 立绘`} />
+            <div className="portrait-crest" aria-label={`${player.rank} 段位纹章`}>
+              <img
+                className="portrait-crest-img"
+                src={player.heroPortrait}
+                alt={`${player.rank} 段位纹章`}
+                decoding="async"
+              />
+            </div>
           ) : (
             // 占位：人物剪影 + 渐变底，不含任何官方素材
             <div className="portrait-placeholder" aria-label="角色立绘占位">
@@ -33,8 +56,8 @@ export default function Profile() {
           <RankBadge rank={player.rank} size="md" />
         </div>
 
-        {/* —— 右：信息 —— */}
-        <div className="profile-info">
+        {/* —— 右：信息（纵向堆叠 → 整块上浮入场） —— */}
+        <div className="profile-info" data-reveal="up">
           <div className="profile-id-row">
             <h3 className="profile-id">{player.id}</h3>
             <RankBadge rank={player.rank} size="sm" />
@@ -45,11 +68,11 @@ export default function Profile() {
           {/* 时长 + 入坑年数 */}
           <div className="profile-metrics">
             <div className="profile-metric">
-              <span className="profile-metric-num">{player.playHours}</span>
+              <span className="profile-metric-num" data-count={player.playHours}>{player.playHours}</span>
               <span className="profile-metric-label">小时游戏时长</span>
             </div>
             <div className="profile-metric">
-              <span className="profile-metric-num">{player.joinDate.slice(0, 4)}</span>
+              <span className="profile-metric-num" data-count={Number(player.joinDate.slice(0, 4))}>{player.joinDate.slice(0, 4)}</span>
               <span className="profile-metric-label">入坑年份</span>
             </div>
           </div>
@@ -60,31 +83,44 @@ export default function Profile() {
             <div className="profile-heroes">
               {player.favHeroes.map((h) => (
                 <div key={h.name} className="hero-chip" title={h.name}>
-                  <span
-                    className="hero-chip-avatar"
-                    style={{ background: `linear-gradient(135deg, ${h.color[0]}, ${h.color[1]})` }}
-                    aria-hidden="true"
-                  />
+                  {h.avatar ? (
+                    <img className="hero-chip-avatar hero-chip-avatar--img" src={h.avatar} alt="" aria-hidden="true" />
+                  ) : (
+                    <span
+                      className="hero-chip-avatar"
+                      style={{ background: `linear-gradient(135deg, ${h.color[0]}, ${h.color[1]})` }}
+                      aria-hidden="true"
+                    />
+                  )}
                   <span className="hero-chip-name">{h.name}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 常用武器 */}
+          {/* 常用武器：点击弹出对应照片/视频 */}
           <div className="profile-block">
             <h4 className="profile-block-title">常用武器</h4>
             <div className="profile-weapons">
               {player.favWeapons.map((w) => (
-                <span key={w} className="weapon-chip">{w}</span>
+                <button
+                  key={w.name}
+                  type="button"
+                  className={`weapon-chip${w.media ? ' weapon-chip--has-media' : ''}`}
+                  onClick={() => openWeapon(w)}
+                  aria-label={`查看${w.name}展示`}
+                >
+                  {w.name}
+                </button>
               ))}
             </div>
           </div>
 
-          {/* 社交账号入口 */}
+          {/* 社交账号入口：socials 为空时整块隐藏，避免空标题 */}
+          {player.socials?.length > 0 && (
           <div className="profile-block">
-            <h4 className="profile-block-title">社交媒体</h4>
-            <div className="profile-socials">
+            <h4 className="profile-block-title" data-reveal="up">社交媒体</h4>
+            <div className="profile-socials" data-reveal-group>
               {player.socials.map((s) => (
                 <a
                   key={s.name}
@@ -99,8 +135,52 @@ export default function Profile() {
               ))}
             </div>
           </div>
+          )}
         </div>
       </div>
+
+      {/* 武器展示弹层：照片 / 视频 / 暂无素材 */}
+      {weaponModal && (
+        <div
+          className="weapon-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${weaponModal.name}展示`}
+          onClick={closeWeapon}
+        >
+          <div className="weapon-lightbox-panel" onClick={(e) => e.stopPropagation()}>
+            <header className="weapon-lightbox-head">
+              <span className="weapon-lightbox-title">{weaponModal.name}</span>
+              <button type="button" className="weapon-lightbox-close" onClick={closeWeapon} aria-label="关闭">
+                ×
+              </button>
+            </header>
+            {weaponModal.media ? (
+              isVideo ? (
+                <video
+                  className="weapon-lightbox-media"
+                  src={weaponModal.media}
+                  controls
+                  autoPlay
+                  playsInline
+                  loop
+                />
+              ) : (
+                <img
+                  className="weapon-lightbox-media"
+                  src={weaponModal.media}
+                  alt={`${weaponModal.name}展示`}
+                />
+              )
+            ) : (
+              <div className="weapon-lightbox-empty">
+                暂无照片或视频
+                <span>把文件放进 public/ 后，在 stats.js 的 media 填路径即可</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </ModeSection>
   )
 }

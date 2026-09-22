@@ -1,10 +1,7 @@
 /**
  * ModeSection —— 版块外壳
- * 每个大版块统一的容器：两侧装饰线 + 中文大标题 + 英文副题 + 内容。
- * 用法：
- *   <ModeSection id="tianxuan" no="02" title="天选之人" en="TIANXUAN" lead="简介文字">
- *     ...内容...
- *   </ModeSection>
+ * 标题区（编号 + 主标题 + 英文副题 + lead 简介）。
+ * 动效由 GSAP 驱动：标题文字 data-split 逐字升起，lead 段落 data-reveal 整块淡入。
  */
 export default function ModeSection({ id, no, title, en, lead, children }) {
   return (
@@ -16,10 +13,10 @@ export default function ModeSection({ id, no, title, en, lead, children }) {
             <span className="mode-rule" aria-hidden="true" />
           </div>
           <h2 className="mode-title">
-            <span className="mode-title-cn">{title}</span>
-            <span className="mode-title-en">{en}</span>
+            <span className="mode-title-cn" data-split>{title}</span>
+            <span className="mode-title-en" data-split>{en}</span>
           </h2>
-          {lead && <p className="mode-lead">{lead}</p>}
+          {lead && <p className="mode-lead" data-reveal="up">{lead}</p>}
         </header>
         <div className="mode-body">{children}</div>
       </div>

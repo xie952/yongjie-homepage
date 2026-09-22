@@ -10,10 +10,11 @@ import { useEffect, useRef, useState } from 'react'
  *
  * 支持小数（decimals）和千分位逗号（comma）。
  */
-export default function useCountUp(target, { duration = 1400, decimals = 0, comma = true } = {}) {
+export default function useCountUp(target, { duration = 1400, decimals = 0, comma = true, delayMs = 0 } = {}) {
   const ref = useRef(null)          // 绑定到要观察的元素
   const [display, setDisplay] = useState(0)
   const playedRef = useRef(false)   // 记录是否已播放过，保证只播一次
+  const timerRef = useRef(null)     // 延迟定时器（延迟开始滚动用）
 
   // 数字格式化：支持小数（decimals）和千分位逗号（comma）。
   // 放在组件作用域，这样下面的 useEffect 和 return 都能用同一个 format。
@@ -48,8 +49,10 @@ export default function useCountUp(target, { duration = 1400, decimals = 0, comm
         entries.forEach((entry) => {
           if (entry.isIntersecting && !playedRef.current) {
             playedRef.current = true
-            animate()
             observer.disconnect()
+            // 支持延迟启动：等卡片入场完成后再滚（默认 0 不延迟）
+            if (delayMs > 0) timerRef.current = setTimeout(animate, delayMs)
+            else animate()
           }
         })
       },
@@ -57,9 +60,12 @@ export default function useCountUp(target, { duration = 1400, decimals = 0, comm
     )
 
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target, duration])
+  }, [target, duration, delayMs])
 
   // 组件加载时先显示一下目标值用于计算宽度（避免抖动），进视野后再滚
   return { ref, display: format(display), raw: display }

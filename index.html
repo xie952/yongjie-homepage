@@ -5,8 +5,253 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="《永劫无间》个人游戏主页：战绩展示与组队招募。非官方个人网站。" />
     <title>永劫无间 · 个人主页</title>
+    <!-- ════════════════════════════════════════════════════════════
+         水墨加载屏关键 CSS（内联，不进打包）
+         放在 index.html 是为了"HTML 解析即显示"：不依赖 React 与 JS 模块加载，
+         避免加载屏自己闪白；z-index 全站最高，盖在尚未定位完成的内容之上。
+         ════════════════════════════════════════════════════════════ -->
+    <style>
+      /* 加载期间禁手势滚动；落点完成后由 App 调 lockScroll() 再彻底锁死 */
+      html.preloading, html.preloading body { touch-action: none; }
+      html.preload-lock, html.preload-lock body { overflow: hidden; }
+
+      #preloader {
+        position: fixed; inset: 0; z-index: 2147483000;
+        display: grid; place-items: center;
+        background: #0a0a0e;
+        --pre-num-size: clamp(72px, 18vw, 120px);   /* 数字基准：改前 clamp(56,9vw,88) */
+        clip-path: circle(150% at 50% 50%);         /* 墨晕起点：铺满 */
+        transition: clip-path .9s cubic-bezier(.6, 0, .3, 1);
+      }
+      #preloader.is-exit { clip-path: circle(0% at 50% 50%); }  /* 收成一滴墨消失 */
+
+      /* 背景墨晕：在 #0a0a0e 之上、所有元素之下（纯静态，无动画无交互） */
+      #preloader::before {
+        content: ""; position: absolute; inset: 0; z-index: 0;
+        background: radial-gradient(ellipse 62% 52% at 50% 46%, rgba(196, 176, 132, .065), transparent 70%);
+      }
+      .pre-inner { position: relative; z-index: 1; display: grid; justify-items: center; }
+
+      /* 四角 L 形角框：各距边 24px，22×22，1px 描边（纯 CSS 静态装饰） */
+      .pre-corners { position: absolute; inset: 24px; z-index: 1; pointer-events: none; }
+      .pre-corners i { position: absolute; width: 22px; height: 22px; border: 0 solid rgba(255, 255, 255, .14); }
+      .pre-corners i:nth-child(1) { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+      .pre-corners i:nth-child(2) { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+      .pre-corners i:nth-child(3) { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+      .pre-corners i:nth-child(4) { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+
+      /* LOADING 小字（纯英文，无其他文字）；text-indent 同 letter-spacing 补偿居中 */
+      .pre-kicker {
+        font-size: 11px; letter-spacing: .52em; text-indent: .52em;
+        color: rgba(255, 255, 255, .5);
+        margin-bottom: 26px;                            /* 与数字间距 26px */
+        white-space: nowrap;
+      }
+      /* 数字 + 外圈环形进度：同一 relative 容器；环绝对居中且不占布局，
+         从而"数字 → 进度线"的原有 18px 间距完全不变 */
+      .pre-dial-wrap { position: relative; display: grid; place-items: center; }
+      .pre-dial {
+        position: absolute; left: 50%; top: 50%;
+        transform: translate(-50%, -50%) rotate(-90deg);  /* 起点在顶部 */
+        width: max(calc(var(--pre-num-size) * 2.15), 200px);
+        height: max(calc(var(--pre-num-size) * 2.15), 200px);
+        pointer-events: none;
+      }
+      .pre-dial circle { fill: none; }
+      .pre-dial .ring-track { stroke: rgba(212, 175, 55, .14); stroke-width: 1; }
+      .pre-dial .ring-fill {
+        stroke: rgba(212, 175, 55, .65);
+        stroke-width: 1;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;              /* 随尺寸缩放仍保持 1px */
+      }
+      .pre-num {
+        display: flex; align-items: baseline;           /* 数字 + % 作为一个整体：基线对齐 */
+        justify-content: center;
+        color: #d4af37;                                 /* 鎏金 */
+        font-family: "STXingkai", "STXingKai", "华文行楷", "KaiTi", "STKaiti", serif;
+        font-size: var(--pre-num-size);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;             /* 防数字跳动（子 span 继承） */
+        font-feature-settings: "tnum" 1;
+      }
+      /* 百分号：字号 = 数字的 0.68 倍、颜色继承数字；与数字同属一个居中整体。
+         对齐方案采用【基线对齐】（.pre-num 的 align-items: baseline）：三者中唯一
+         让 % 与数字共用同一条基线，比例放大到 0.68 后仍是"一行数字+单位"的读法；
+         垂直居中会让 % 悬在数字腰部、上标式(flex-start + translateY(10%)) 会把它顶到
+         数字上方，两者在大字号数字旁都显得漂浮（对比图见验收记录）。
+         它是静态兄弟节点（不参与 rAF 写入），因此不存在"数字跳了 % 没跳"的错位。 */
+      .pre-num-pct {
+        font-size: calc(var(--pre-num-size) * 0.68);
+        color: inherit;
+      }
+      .pre-bar { width: 120px; height: 1px; margin-top: 18px; background: rgba(212, 175, 55, .18); overflow: hidden; }
+      .pre-bar i { display: block; width: 100%; height: 100%; background: #d4af37;
+        transform: scaleX(0); transform-origin: 0 50%; }  /* 与数字同步的进度线 */
+
+      /* 墨点省略号（替代任何文字标签） */
+      .pre-dots { margin-top: 18px; display: flex; gap: 8px; }
+      .pre-dots span { width: 4px; height: 4px; border-radius: 50%; background: rgba(255, 255, 255, .8);
+        animation: preDot 1.2s ease-in-out infinite; }
+      .pre-dots span:nth-child(2) { animation-delay: .2s; }
+      .pre-dots span:nth-child(3) { animation-delay: .4s; }
+      @keyframes preDot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .pre-dots span { animation: none; opacity: .6; } }
+    </style>
   </head>
   <body>
+    <!-- 加载屏：React 不管理它；进度/退场/移除全部由下面这段原生脚本完成 -->
+    <div id="preloader" role="status" aria-live="polite" aria-label="加载中">
+      <div class="pre-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="pre-inner">
+        <div class="pre-kicker">LOADING</div>
+        <div class="pre-dial-wrap">
+          <!-- 环形进度：viewBox 0 0 100 100 / r=49 / pathLength=100；dashoffset = 100 − 进度 -->
+          <svg class="pre-dial" viewBox="0 0 100 100" aria-hidden="true">
+            <circle class="ring-track" cx="50" cy="50" r="49" pathLength="100" />
+            <circle class="ring-fill" id="pre-ring" cx="50" cy="50" r="49" pathLength="100"
+                    stroke-dasharray="100" stroke-dashoffset="100" />
+          </svg>
+          <div class="pre-num"><span id="pre-num-val">0</span><span class="pre-num-pct" aria-hidden="true">%</span></div>
+        </div>
+        <div class="pre-bar"><i id="pre-bar-fill"></i></div>
+        <div class="pre-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         加载屏脚本（原生 JS，非模块：解析即执行，早于 React）
+         进度模型 = 真实里程碑（字体 45% / poster 70% / 视频 canplay 90% / 全就绪 100%）
+                    + 演出节奏（rAF 里 easeOut 向"允许上限"爬升，永不超前）
+         退场 = 墨晕揭示（clip-path circle 150%→0%，0.9s）→ 移除 DOM → 放行守卫队列
+         ════════════════════════════════════════════════════════════ -->
+    <script>
+      (function () {
+        var el = document.getElementById("preloader");
+        var numEl = document.getElementById("pre-num-val");
+        var barEl = document.getElementById("pre-bar-fill");
+        var ringEl = document.getElementById("pre-ring");   // 环形进度（与数字同源，仅视觉冗余）
+        var html = document.documentElement;
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var isRevealed = false;
+        var isDone = false;
+
+        // 与 App 握手的最小 API（React 不管理加载屏，只查询/通知）
+        window.__preloader = {
+          revealed: function () { return isRevealed; },
+          done: function () { return isDone; },
+          // 落点完成后调用：此刻才敢彻底锁滚动（过早会挡住 boot 的 programmatic scrollTo）。
+          // reduced-motion（已跳过加载屏、不走退场流程）或已放行时必须 no-op，
+          // 否则 preload-lock 会永久残留 → 页面再也滚不动。
+          lockScroll: function () { if (reduce || isDone) return; html.classList.add("preload-lock"); },
+        };
+
+        function release() {
+          html.classList.remove("preloading");
+          html.classList.remove("preload-lock");
+          window.removeEventListener("wheel", block, { passive: false });
+          window.removeEventListener("touchmove", block, { passive: false });
+          window.removeEventListener("keydown", blockKey, true);
+        }
+        function block(e) { e.preventDefault(); }
+        function blockKey(e) {
+          var k = e.key;
+          if (k === "ArrowUp" || k === "ArrowDown" || k === "PageUp" || k === "PageDown" || k === "Home" || k === "End" || k === " ") e.preventDefault();
+        }
+
+        // —— prefers-reduced-motion：跳过加载屏直接进入页面（守卫队列立即开闸）——
+        if (reduce) {
+          if (el && el.parentNode) el.remove();
+          isRevealed = true; isDone = true;
+          window.dispatchEvent(new CustomEvent("preloader-reveal"));
+          window.dispatchEvent(new CustomEvent("preloader-done"));
+          return;
+        }
+
+        html.classList.add("preloading");
+        window.addEventListener("wheel", block, { passive: false });
+        window.addEventListener("touchmove", block, { passive: false });
+        window.addEventListener("keydown", blockKey, true);
+
+        var ALLOW = 0;                 // 当前允许上限（%）—— 永不超前于真实进度
+        var shown = 0;                 // 当前显示值
+        var t0 = performance.now();
+        var MIN_MS = 1200, MAX_MS = 5000, HOLD_MS = 350;   // 最短 1.2s / 最长 5s / 停顿 0.35s
+        var raf = 0, exited = false, holdTimer = 0;
+        var fontsOk = false, posterOk = false, videoOk = false;
+
+        function bump() {
+          var allowed = 0;
+          if (fontsOk) allowed = 45;
+          if (posterOk) allowed = 70;
+          if (videoOk) allowed = 90;
+          if (fontsOk && posterOk && videoOk) allowed = 100;
+          if (allowed > ALLOW) ALLOW = allowed;
+        }
+
+        // 字体：document.fonts.ready
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fontsOk = true; bump(); });
+        else { fontsOk = true; bump(); }
+
+        // poster / video 由 React 渲染 → 轮询等待其出现（有界，句柄在退场时清理）
+        var watch = setInterval(function () {
+          var poster = document.querySelector(".hero-poster");
+          var video = document.querySelector(".hero-video");
+          if (poster && !posterOk && poster.complete && poster.naturalWidth > 0) { posterOk = true; bump(); }
+          if (video && !videoOk) {
+            if (video.readyState >= 3) { videoOk = true; bump(); }
+            else video.addEventListener("canplay", function () { videoOk = true; bump(); }, { once: true });
+          }
+          if (posterOk && videoOk) clearInterval(watch);
+        }, 100);
+
+        // 演出：rAF 里沿 easeOut 逼近"允许上限"，平滑追赶而非跳变
+        function tick(now) {
+          var elapsed = now - t0;
+          var ease = 1 - Math.pow(1 - Math.min(1, elapsed / 1600), 3);
+          var target = ALLOW * ease;
+          if (target > shown) shown += Math.min(1.2, (target - shown) * 0.12 + 0.05);
+          if (shown > ALLOW) shown = ALLOW;
+          numEl.textContent = String(Math.floor(shown));
+          barEl.style.transform = "scaleX(" + (shown / 100) + ")";
+          if (ringEl) ringEl.setAttribute("stroke-dashoffset", String(100 - shown));  // 同一次 rAF 内同步
+          var force = elapsed >= MAX_MS;                       // 慢网/资源失败兜底
+          if (force || (ALLOW >= 100 && shown >= 99.5 && elapsed >= MIN_MS)) {
+            shown = 100; numEl.textContent = "100"; barEl.style.transform = "scaleX(1)";
+            if (ringEl) ringEl.setAttribute("stroke-dashoffset", "0");
+            cancelAnimationFrame(raf); raf = 0;
+            holdTimer = setTimeout(exit, HOLD_MS);             // 满格后呼吸一口再走
+            return;
+          }
+          raf = requestAnimationFrame(tick);
+        }
+        raf = requestAnimationFrame(tick);
+
+        function exit() {
+          if (exited) return;
+          exited = true;
+          clearInterval(watch);
+          isRevealed = true;
+          window.dispatchEvent(new CustomEvent("preloader-reveal"));   // Hero 入场时间轴在此刻起跑
+          el.classList.add("is-exit");                                  // 墨晕揭示
+          var finished = false;
+          var finish = function () {
+            if (finished) return;
+            finished = true;
+            release();
+            if (el.parentNode) el.remove();                             // 不留 DOM
+            isDone = true;
+            window.dispatchEvent(new CustomEvent("preloader-done"));    // 守卫队列开闸
+          };
+          el.addEventListener("transitionend", function (e) { if (e.propertyName === "clip-path") finish(); });
+          setTimeout(finish, 1200);                                     // 兜底（transitionend 丢失时）
+        }
+
+        // 极端兜底：rAF 被打断/脚本异常时也放行
+        setTimeout(function () { if (!exited) exit(); }, MAX_MS + 800);
+      })();
+    </script>
+
     <!-- 整个网站由 React 渲染进下面这个空容器 -->
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
