@@ -1,0 +1,271 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import './LoadoutCarousel.css'
+
+/* ════════════════════════════════════════════════════════════
+ * LoadoutCarousel —— 常用英雄 & 武器 合并区块（3D 渐变轮播）
+ *   规格来源：单文件原型 public/loadout-carousel.html（已逐项实测通过）
+ *   本组件是它的 React 移植：几何参数、主题色、卡片结构、交互完全一致。
+ *
+ *   规格：7 卡单行 · 居中放大 · 两侧 3D 旋转 + 沿 Z 后退 + 缩小 · 距离>3 隐藏 · 首尾循环
+ *     perspective 1600px / origin 50% 46% / maxRotation 26deg / maxDepth 210px / minScale .8
+ *     步长 = 卡宽 + 间距 · 桌面 360×392 gap26 / ≤900 314×352 gap18 / ≤560 276×320 gap14
+ *     圆角 18 / 内边距 24 / 头像 124(96/84) / 皮肤缩略图 84(72) / 舞台高 = 卡高 + 96
+ *     背景 3 径向光斑 blur(28px) saturate(1.15) + 居中卡主题色 700ms 过渡 + 3px 噪点 overlay .35
+ *     交互：拖拽>60px 翻页（区分点击/拖拽）· 滚轮 320ms 节流 · ←/→ · 点侧卡居中 · 圆点 · 箭头 · 循环无死角
+ *
+ *   ⚠ 与原型的一处刻意差异（站点环境必需）：滚轮只在【横向手势】时接管翻页，纵向滚轮交还页面。
+ *     原型是独立页面、吞掉滚轮无副作用；本站整页可滚动（Lenis），吞纵向滚轮会让鼠标停在本区块时
+ *     页面滚不动 —— 站内已两次踩过同一个坑（十殿门列表、魂玉弹窗）。横向手势（触控板左右滑）翻页照常。
+ * ════════════════════════════════════════════════════════════ */
+
+const THEMES = {
+  hero:   { bg: ['#e8c877', '#e0592b', '#6b4e1f'], accent: '#d8b56a', bright: '#e8c877', deep: '#a98a4a' },
+  red:    { bg: ['#e0796a', '#8f2a1f', '#3d1712'], accent: '#c8483a', bright: '#e0796a', deep: '#8f2a1f' },
+  weapon: { bg: ['#d8b56a', '#b0642a', '#4d3418'], accent: '#d8b56a', bright: '#e8c877', deep: '#b0642a' }
+}
+
+const MAX_ROT = 26        // maxRotationDegrees
+const MAX_DEPTH = 210     // maxDepthPx
+const MIN_SCALE = 0.8     // minScale
+const MAX_DIST = 3        // 距离 >3 隐藏
+const DRAG_THRESHOLD = 60
+const WHEEL_THROTTLE = 320
+
+export default function LoadoutCarousel({ items, modeId }) {
+  const n = items.length
+  const [active, setActive] = useState(0)
+
+  const stageRef = useRef(null)
+  const trackRef = useRef(null)
+  const cardRefs = useRef([])
+  const blobRefs = useRef([])
+  const dragRef = useRef(null)
+  const draggedRef = useRef(false)
+  const wheelRef = useRef(0)
+  const tiltRef = useRef({ x: 0, y: 0, drag: 0 })
+  const activeRef = useRef(0)   // 供原生 wheel 监听器读取最新 active（避免闭包过期）
+
+  useEffect(() => { activeRef.current = active }, [active])
+
+  const step = useCallback(() => {
+    const cs = getComputedStyle(stageRef.current)
+    return parseFloat(cs.getPropertyValue('--lo-card-w')) + parseFloat(cs.getPropertyValue('--lo-gap'))
+  }, [])
+
+  const applyTrack = useCallback(() => {
+    const t = trackRef.current
+    if (!t) return
+    const { x, y, drag } = tiltRef.current
+    t.style.transform = 'rotateX(' + x.toFixed(2) + 'deg) rotateY(' + y.toFixed(2) + 'deg) translateX(' + drag.toFixed(1) + 'px)'
+  }, [])
+
+  const layout = useCallback(() => {
+    if (!stageRef.current) return
+    const s = step()
+    cardRefs.current.forEach((el, i) => {
+      if (!el) return
+      let d = ((i - active) % n + n) % n
+      if (d > n / 2) d -= n
+      const ad = Math.abs(d)
+      const hide = ad > MAX_DIST
+      if (el.hidden !== hide) el.hidden = hide
+      if (hide) return
+      const t = Math.min(ad, MAX_DIST) / MAX_DIST
+      const rot = d === 0 ? 0 : -Math.sign(d) * MAX_ROT
+      el.style.transform =
+        'translate(-50%, -50%) translateX(' + (d * s).toFixed(1) + 'px)' +
+        ' translateZ(' + (-MAX_DEPTH * t).toFixed(1) + 'px)' +
+        ' rotateY(' + rot.toFixed(2) + 'deg)' +
+        ' scale(' + (1 - (1 - MIN_SCALE) * t).toFixed(3) + ')'
+      el.style.opacity = (1 - 0.55 * t).toFixed(3)
+      el.style.zIndex = String(100 + (MAX_DIST - ad))
+      el.classList.toggle('is-active', d === 0)
+    })
+    // 居中卡主题色 → 三光斑（颜色过渡由 CSS 的 700ms 完成）
+    const bg = (THEMES[items[active].theme] || THEMES.hero).bg
+    blobRefs.current.forEach((b, i) => { if (b) b.style.color = bg[i] || bg[0] })
+  }, [active, n, items, step])
+
+  useEffect(() => { layout() }, [layout, modeId])
+  useEffect(() => {
+    const on = () => layout()
+    window.addEventListener('resize', on)
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(on).catch(function () {})
+    return () => window.removeEventListener('resize', on)
+  }, [layout])
+
+  const setIndex = useCallback((i) => setActive(((i % n) + n) % n), [n])
+
+  /* ---- 指针：拖拽 >60px 翻页；未越阈值时是纯点击（点侧卡居中） ---- */
+  const onPointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    dragRef.current = { x: e.clientX, id: e.pointerId }
+    draggedRef.current = false
+    stageRef.current.classList.add('is-dragging')
+  }
+  const onPointerMove = (e) => {
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    if (!dragRef.current) {
+      if (fine) {
+        const r = stageRef.current.getBoundingClientRect()
+        tiltRef.current.y = ((e.clientX - r.left) / r.width - 0.5) * 12   // -6 ~ 6
+        tiltRef.current.x = -((e.clientY - r.top) / r.height - 0.5) * 8   // -4 ~ 4
+        applyTrack()
+      }
+      return
+    }
+    const dx = e.clientX - dragRef.current.x
+    if (!draggedRef.current && Math.abs(dx) > 6) {
+      draggedRef.current = true
+      // 越过阈值才捕获指针：否则 click 目标会被重定向到舞台，点侧卡居中会静默失效（原型实测过）
+      try { stageRef.current.setPointerCapture(dragRef.current.id) } catch (err) { /* noop */ }
+    }
+    if (draggedRef.current) { tiltRef.current.drag = dx * 0.35; applyTrack() }
+  }
+  const onPointerUp = (e) => {
+    if (!dragRef.current) return
+    const dx = e.clientX - dragRef.current.x
+    stageRef.current.classList.remove('is-dragging')
+    tiltRef.current.drag = 0
+    applyTrack()
+    if (draggedRef.current && Math.abs(dx) > DRAG_THRESHOLD) setIndex(active + (dx < 0 ? 1 : -1))
+    dragRef.current = null
+    window.setTimeout(() => { draggedRef.current = false }, 0)
+  }
+  const onPointerCancel = () => {
+    dragRef.current = null
+    tiltRef.current.drag = 0
+    if (stageRef.current) stageRef.current.classList.remove('is-dragging')
+    applyTrack()
+  }
+  const onPointerLeave = () => {
+    if (dragRef.current) return
+    tiltRef.current.x = 0
+    tiltRef.current.y = 0
+    applyTrack()
+  }
+
+  /* ---- 滚轮：仅横向手势翻页（纵向交还页面，见文件头注释）；320ms 节流 ----
+     ⚠ 必须用原生 addEventListener({ passive: false })：React 的 onWheel 注册在被动监听上，
+       preventDefault() 无效，控制台会报 「Unable to preventDefault inside passive event listener」 —— 实测复现过。 */
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return undefined
+    const onWheelNative = (e) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return   // 纵向手势交还页面（Lenis）
+      e.preventDefault()
+      const now = Date.now()
+      if (now - wheelRef.current < WHEEL_THROTTLE) return     // 320ms 节流
+      wheelRef.current = now
+      setIndex(activeRef.current + (e.deltaX > 0 ? 1 : -1))
+    }
+    el.addEventListener('wheel', onWheelNative, { passive: false })
+    return () => el.removeEventListener('wheel', onWheelNative)
+  }, [setIndex])
+
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setIndex(active - 1) }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); setIndex(active + 1) }
+  }
+
+  const onCardClick = (i) => {
+    if (draggedRef.current) return
+    if (i !== active) setActive(i)
+  }
+
+  const cards = useMemo(() => items.map((it, i) => {
+    const th = THEMES[it.theme] || THEMES.hero
+    const usage = (it.usageByMode && it.usageByMode[modeId]) || 0
+    return { it, i, th, usage }
+  }), [items, modeId])
+
+  return (
+    <section className="lo-block" aria-roledescription="carousel" aria-label="常用英雄与武器">
+      <header className="lo-head">
+        <h3 className="lo-title">常用英雄 &amp; 武器</h3>
+        <div className="lo-legend">
+          <span className="lo-legend-item"><i className="lo-dot lo-dot--hero" />英雄 ×3</span>
+          <span className="lo-legend-item"><i className="lo-dot lo-dot--weapon" />武器 ×4</span>
+        </div>
+      </header>
+
+      <div
+        className="lo-stage"
+        ref={stageRef}
+        tabIndex={0}
+        role="group"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onPointerLeave={onPointerLeave}
+        onKeyDown={onKeyDown}
+      >
+        <div className="lo-ambient" aria-hidden="true">
+          <span className="lo-blob lo-blob--a" ref={(el) => { blobRefs.current[0] = el }} />
+          <span className="lo-blob lo-blob--b" ref={(el) => { blobRefs.current[1] = el }} />
+          <span className="lo-blob lo-blob--c" ref={(el) => { blobRefs.current[2] = el }} />
+          <span className="lo-grain" />
+        </div>
+
+        <div className="lo-track" ref={trackRef}>
+          {cards.map(({ it, i, th, usage }) => (
+            <article
+              key={it.name}
+              ref={(el) => { cardRefs.current[i] = el }}
+              className={'lo-card' + (active === i ? ' is-active' : '')}
+              data-theme={it.theme}
+              aria-label={it.kind + ' ' + it.name + '，使用率 ' + usage + '%'}
+              style={{ '--lo-accent': th.accent, '--lo-bright': th.bright, '--lo-deep': th.deep }}
+              onClick={() => onCardClick(i)}
+            >
+              <span className="lo-badge">{it.kind}</span>
+              <div className="lo-persona">
+                {/* [资源替换位置] 头像：把下面这个 span 换成 <img className="lo-avatar" src="图片URL" alt={名称} /> */}
+                <span className="lo-avatar">头像</span>
+                <h4 className="lo-name">{it.name}</h4>
+              </div>
+              <div className="lo-usage">
+                <div className="lo-usage-head"><span>使用率</span><b>{usage}%</b></div>
+                <div className="lo-bar"><i style={{ width: usage + '%' }} /></div>
+              </div>
+              <div className="lo-foot">
+                <span className="lo-idx">{String(i + 1).padStart(2, '0')}</span>
+                <div className="lo-skin">
+                  {/* [资源替换位置] 皮肤缩略图：把下面这个 span 换成 <img className="lo-thumb" src="图片URL" alt={皮肤名} /> */}
+                  <span className="lo-thumb">皮肤</span>
+                  <div className="lo-skin-meta">
+                    <span className="lo-skin-name">{it.skin.name}</span>
+                    <span className="lo-grade">{it.skin.grade}</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="lo-controls">
+        <button className="lo-arrow" type="button" aria-label="上一张" onClick={() => setIndex(active - 1)}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <div className="lo-dots" role="tablist" aria-label="卡片导航">
+          {items.map((it, i) => (
+            <button
+              key={it.name}
+              type="button"
+              role="tab"
+              aria-selected={active === i}
+              aria-label={'第 ' + (i + 1) + ' 张：' + it.name}
+              className={active === i ? 'is-active' : ''}
+              onClick={() => setActive(i)}
+            />
+          ))}
+        </div>
+        <button className="lo-arrow" type="button" aria-label="下一张" onClick={() => setIndex(active + 1)}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
+    </section>
+  )
+}

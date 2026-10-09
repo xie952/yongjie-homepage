@@ -1,0 +1,166 @@
+import ModeSection from './ModeSection'
+import TabGroup from './TabGroup'
+import StatCard from './StatCard'
+import MagicBento from './MagicBento/MagicBento'
+import RankBadge from './RankBadge'
+import HeroCard from './HeroCard'
+import WeaponCard from './WeaponCard'
+import DepthCarousel from './DepthCarousel/DepthCarousel'
+import { tianxuan, weaponTheme } from '../data/stats'
+
+/* 轮播的逐卡主题色：直接引用 stats.js 里已有的 themeColor / 派生 weaponTheme，
+   不新增任何色值 —— 英雄卡哈迪金 / 殷紫萍金 / 沈妙红，武器卡统一 = 哈迪那条金。 */
+const HERO_ITEMS = tianxuan.heroes.map((h) => ({ ...h, tint: h.themeColor }))
+const WEAPON_ITEMS = tianxuan.weapons.map((w) => ({ ...w, tint: weaponTheme.hex }))
+
+/**
+ * 天选之人版块：
+ * - Tab 切换 单排 / 双排 / 三排，各自展示排位数据
+ * - 常用英雄卡片（使用率随当前 Tab 联动）
+ * - 常用武器卡片
+ */
+
+// 排位指标 14 卡扁平顺序（与截图字段对齐）；"—" 静态占位
+const SOLO_METRICS = [
+  { key: 'matches',       label: '场次',        suffix: '',   decimals: 0, accent: false },
+  { key: 'wins',          label: '天选次数',    suffix: '',   decimals: 0, accent: false },
+  { key: 'winRate',       label: '天选率',      suffix: '%',  decimals: 1, accent: false },
+  { key: 'top5',          label: '前五数',      suffix: '',   decimals: 0, accent: false },
+  { key: 'kills',         label: '击败',        suffix: '',   decimals: 0, accent: false },
+  { key: 'avgDamage',     label: '场均伤害',    suffix: '',   decimals: 0, accent: false },
+  { key: 'maxKills',      label: '最高击杀',    suffix: '',   decimals: 0, accent: false },
+  { key: 'kd',            label: 'KD',          suffix: '',   decimals: 2, accent: false },
+  { key: 'maxSurvival',   label: '最长生存',    suffix: '',   decimals: 0, accent: false, format: 'time' },
+  { key: 'avgSurvival',   label: '场均生存',    suffix: '',   decimals: 0, accent: false, format: 'time' },
+  { key: 'maxMoveDist',   label: '最长移动距离', suffix: '',   decimals: 0, accent: false },
+  { key: 'avgMoveDist',   label: '场均移动距离', suffix: '',   decimals: 0, accent: false },
+  { key: 'avgRevives',    label: '场均救援',    suffix: '次', decimals: 1, accent: false },
+  { key: 'avgHeal',       label: '场均治疗',    suffix: '',   decimals: 0, accent: false }
+]
+
+const MODE_TABS = [
+  { id: 'solo', label: '单排', rankLabel: '青铜' },
+  { id: 'duo',  label: '双排', rankLabel: '无间修罗' },
+  { id: 'trio', label: '三排', rankLabel: '无相龙王' }
+]
+
+export default function TianxuanSection() {
+  return (
+    <ModeSection id="tianxuan" no="02" title="天选之人" en="TIANXUAN" lead={tianxuan.intro}>
+
+      <TabGroup
+        baseHash="tianxuan"
+        defaultId="trio"
+        tabs={MODE_TABS.map((m) => ({
+          id: m.id,
+          label: m.label,
+          content: <ModePanel modeId={m.id} />
+        }))}
+      />
+
+    </ModeSection>
+  )
+}
+
+// 单个模式的数据面板
+function ModePanel({ modeId }) {
+  const data = tianxuan.modes[modeId]
+
+  return (
+    <div className="mode-panel">
+      {/* 历史段位 + 历史积分（积分无数据时隐藏） */}
+      <div className="mode-rank-row" data-reveal-group>
+        <div className="mode-rank-block">
+          <span className="mode-rank-label">历史段位</span>
+          <RankBadge rank={data.rank} size="lg" crest={data.rankCrest || null} />
+        </div>
+        {data.score != null && data.score !== '' && (
+          <div className="mode-score-block">
+            <StatCard label="历史积分" value={data.score} accent />
+          </div>
+        )}
+      </div>
+
+      {/* 常规指标 14 卡：同一网格语言，层叠错峰入场。
+          卡片容器交给 MagicBento（React Bits）：全局聚光 + 邻近卡泛金光 + 点击金色涟漪。
+          · items 就是既有的 SOLO_METRICS —— 数据源 / 数值 / 数字滚动一律不动
+          · gridClassName="stat-grid" → 列定义、间距、margin 全部沿用现有数据卡网格，
+            不使用组件默认的 4 栏 / 0.5em gap / 0.75em padding
+          · renderItem 直接复用既有 <StatCard>（左上角切角 + 指标名 + 金色数值 + 数字滚动），
+            不使用组件默认的 header(label) + content(title, desc) 结构
+          · data-reveal-group 保留 → 既有入场涟漪照旧生效，与 MagicBento 效果叠加 */}
+      <MagicBento
+        items={SOLO_METRICS}
+        gridClassName="stat-grid"
+        gridProps={{ 'data-reveal-group': true }}
+        renderItem={(m, i) => (
+          <StatCard
+            key={m.key}
+            label={m.label}
+            value={data[m.key]}
+            suffix={m.suffix}
+            decimals={m.decimals}
+            accent={m.accent}
+            format={m.format}
+            index={i}
+          />
+        )}
+      />
+
+      {/* 常用英雄 + 武器 */}
+      <div className="loadout-grid">
+        <div className="loadout-col">
+          <h4 className="loadout-title" data-reveal="up">常用英雄</h4>
+          {/* 承载容器换成 React Bits DepthCarousel（内联版）：3D 景深 + 拖拽 + 惯性。
+              卡片渲染体仍是既有 <HeroCard>（复用未重写），标签/进度条/皮肤子卡结构不变。
+              item.tint 逐卡取该英雄的 themeColor（哈迪金 / 殷紫萍金 / 沈妙红），不新增色值。 */}
+          <div className="loadout-carousel">
+            <DepthCarousel
+              items={HERO_ITEMS}
+              ariaLabel="常用英雄轮播"
+              cardWidth={340}
+              cardHeight={224}   // 实测卡内容高 219 → 收紧，避免下半部空白
+              radius={14}
+              depth={240}
+              spread={104}
+              tilt={26}
+              perspective={1400}
+              visibleCards={3}
+              falloff={0.22}
+              blur={5}
+              glowSize={54}          // 等价于 Pro 版 gradientSize
+              glowIntensity={0.2}    // 等价于 Pro 版 gradientIntensity（screen 叠加，过高会冲淡皮肤缩略图）
+              tint="#0b0a09"          // 景深雾基色（读站内 --bg 值，不新增色）
+              renderItem={(h) => <HeroCard hero={h} usage={h.useByMode[modeId] || 0} />}
+            />
+          </div>
+        </div>
+
+        <div className="loadout-col">
+          <h4 className="loadout-title" data-reveal="up">常用武器</h4>
+          {/* 与英雄区各自独立实例（不共用状态）；武器卡主题色取 stats.js 派生的 weaponTheme（= 哈迪那条金） */}
+          <div className="loadout-carousel loadout-carousel--weapon">
+            <DepthCarousel
+              items={WEAPON_ITEMS}
+              ariaLabel="常用武器轮播"
+              cardWidth={340}
+              cardHeight={212}   // 实测卡内容高 207
+              radius={14}
+              depth={220}
+              spread={96}
+              tilt={24}
+              perspective={1400}
+              visibleCards={3}
+              falloff={0.22}
+              blur={5}
+              glowSize={54}
+              glowIntensity={0.22}
+              tint="#0b0a09"
+              renderItem={(w) => <WeaponCard weapon={w} usage={w.useByMode[modeId] || 0} />}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

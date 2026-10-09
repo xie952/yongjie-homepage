@@ -1,0 +1,201 @@
+/* ════════════════════════════════════════════════════════════
+   LoadoutCarousel —— 常用英雄 & 武器 合并区块样式
+   与单文件原型 public/loadout-carousel.html 的规格逐值一致；
+   类名统一 lo- 前缀，避免与站内既有卡片体系（hero-card / weapon-card / stat-card）相互污染。
+   颜色只出现在主题三色里（规格给定）：主金 #d8b56a / 亮金 #e8c877 / 深金 #a98a4a / 沈妙红 #c8483a 系 / 武器金铜 #b0642a。
+   ════════════════════════════════════════════════════════════ */
+
+.lo-block { margin-top: 40px; }
+.lo-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+.lo-title {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 21px;
+  letter-spacing: .16em;
+  color: var(--gold-2);
+  display: flex; align-items: center; gap: 14px;
+}
+.lo-title::before { content: ""; width: 26px; height: 1px; background: var(--gold); }
+.lo-legend { display: flex; align-items: center; gap: 18px; font-size: 13px; color: var(--muted); letter-spacing: .08em; }
+.lo-legend-item { display: inline-flex; align-items: center; gap: 8px; }
+.lo-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.lo-dot--hero { background: #d8b56a; box-shadow: 0 0 10px rgba(216, 181, 106, .65); }
+.lo-dot--weapon { background: #b0642a; box-shadow: 0 0 10px rgba(176, 100, 42, .6); }
+
+/* ===== 舞台 ===== */
+.lo-stage {
+  position: relative;
+  height: calc(var(--lo-card-h) + 96px);       /* 舞台高 = 卡高 + 96 */
+  perspective: 1600px;
+  perspective-origin: 50% 46%;
+  overflow: hidden;
+  contain: paint;      /* 强制把子树裁切在本元素内：仅有 overflow:hidden 时，含 preserve-3d 的子树会逃逸（实测光柱） */
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: #0d0c0a;
+  --lo-card-w: 360px; --lo-card-h: 392px; --lo-gap: 26px;
+  --lo-avatar: 124px; --lo-thumb: 84px; --lo-pad: 24px; --lo-radius: 18px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+.lo-stage.is-dragging { cursor: grabbing; }
+.lo-stage:focus-visible { outline: 1px solid rgba(216, 181, 106, .5); outline-offset: 6px; }
+@media (max-width: 900px) {
+  .lo-stage { --lo-card-w: 314px; --lo-card-h: 352px; --lo-gap: 18px; --lo-avatar: 96px; --lo-thumb: 72px; }
+}
+@media (max-width: 560px) {
+  .lo-stage { --lo-card-w: 276px; --lo-card-h: 320px; --lo-gap: 14px; --lo-avatar: 84px; --lo-pad: 18px; --lo-radius: 16px; }
+  .lo-title { font-size: 18px; }
+}
+
+/* 环境渐变：局部裁切层 + 3 个柔和径向光斑（颜色随居中卡 700ms 过渡）+ 3px 噪点。
+   红线遵守：
+     · 光晕只在本区块内 —— .lo-glow-clip 是 absolute + inset:0 + overflow:hidden + contain:paint，
+       绝不使用 position:fixed 的全屏光晕层；
+     · 不使用 filter:blur()（暗底大范围模糊会产生竖向色带/光柱 —— 实测它就是逃出裁剪、
+       在「天选之人」数据卡区形成那条竖直金柱的原因）；柔和度全部交给 radial-gradient 自身；
+     · 透明停靠点 72%（≥70%），整体透明度 .72（≤0.72）—— 不触碰本区块以外的任何样式。 */
+.lo-glow-clip {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  contain: paint;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+.lo-ambient { position: absolute; inset: 0; opacity: .72; pointer-events: none; }
+.lo-blob {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(closest-side, currentColor, transparent 72%);
+  transition: color 700ms cubic-bezier(.22, 1, .36, 1);
+  opacity: .5;
+}
+.lo-blob--a { width: 62%; height: 78%; left: 4%; top: -6%; }
+.lo-blob--b { width: 56%; height: 72%; left: 34%; top: 12%; opacity: .42; }
+.lo-blob--c { width: 50%; height: 66%; right: 2%; top: -2%; opacity: .36; }
+.lo-grain {
+  position: absolute; inset: 0; opacity: .3; mix-blend-mode: overlay; pointer-events: none;   /* ~0.3 抗色带 */
+  background-image: radial-gradient(rgba(255, 255, 255, .5) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* 轨道：鼠标视差载体（rotateX -4~4deg / rotateY -6~6deg） */
+.lo-track {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateX(0deg) rotateY(0deg) translateX(0px);
+  transition: transform 260ms cubic-bezier(.22, 1, .36, 1);
+  z-index: 1;
+}
+.lo-stage.is-dragging .lo-track { transition: none; }
+
+/* ===== 卡片 ===== */
+.lo-card {
+  position: absolute; left: 50%; top: 50%;
+  width: var(--lo-card-w); height: var(--lo-card-h); padding: var(--lo-pad);
+  border-radius: var(--lo-radius);
+  border: 1px solid color-mix(in srgb, var(--lo-accent) 30%, transparent);
+  background: linear-gradient(180deg, #241f18, #17140f);
+  display: flex; flex-direction: column;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+  transition: transform 620ms cubic-bezier(.22, 1, .36, 1), opacity 620ms cubic-bezier(.22, 1, .36, 1),
+              translate 200ms ease, border-color 400ms ease, box-shadow 400ms ease;
+  box-shadow: 0 26px 60px -28px rgba(0, 0, 0, .8);
+  overflow: hidden;
+  cursor: pointer;
+}
+.lo-stage.is-dragging .lo-card { transition: none; }
+.lo-card.is-active {
+  border-color: var(--lo-bright);
+  box-shadow: 0 30px 70px -26px rgba(0, 0, 0, .85), 0 0 42px color-mix(in srgb, var(--lo-bright) 34%, transparent);
+}
+/* 悬停反馈（2026-09-25）：原先卡片只有 cursor:pointer，鼠标移上去零响应。
+   注意「上浮」不能用 transform —— 卡片的三维位置由 JS 写内联 transform 驱动
+   （LoadoutCarousel.jsx: el.style.transform = …），内联优先级高于样式表，写在这里会被顶掉。
+   因此用独立属性 translate：它与 transform 在同一条变换链上叠加，互不覆盖。
+   拖拽中不响应，避免按住拖动时卡片还在跳。 */
+@media (hover: hover) {
+  .lo-stage:not(.is-dragging) .lo-card:hover {
+    translate: 0 -6px;
+    border-color: color-mix(in srgb, var(--lo-bright) 62%, transparent);
+    box-shadow: 0 34px 74px -26px rgba(0, 0, 0, .88);
+  }
+}
+.lo-card[hidden] { display: none; }
+
+.lo-badge {
+  position: absolute; top: calc(var(--lo-pad) - 4px); right: calc(var(--lo-pad) - 4px);
+  padding: 5px 11px; border-radius: 999px; line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--lo-accent) 55%, transparent);
+  color: var(--lo-bright); font-size: 11px; letter-spacing: .18em;
+}
+.lo-persona { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px; }
+.lo-avatar {
+  width: var(--lo-avatar); height: var(--lo-avatar); border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--lo-accent) 45%, transparent);
+  background: rgba(0, 0, 0, .35);   /* 仅作透明 PNG 的底衬，不再使用斜纹占位 */
+  display: block; overflow: hidden;
+}
+/* 真实头像图（沿用项目既有图片）：100%/cover，避免拉伸变形 */
+.lo-avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lo-name { margin: 0; font-family: var(--font-title); font-size: 22px; letter-spacing: .08em; color: var(--text); }
+
+.lo-usage { margin-top: 14px; }
+.lo-usage-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; }
+.lo-usage-head span { font-size: 12px; letter-spacing: .16em; color: var(--muted); }
+.lo-usage-head b { font-family: var(--font-title); font-size: 20px; font-weight: 600; color: var(--lo-bright); }
+.lo-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.lo-bar i {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--lo-deep), var(--lo-bright));
+  transition: width 620ms cubic-bezier(.22, 1, .36, 1);
+}
+
+/* 底部一行：左下角大号序号 + 皮肤子卡 */
+.lo-foot { margin-top: auto; display: flex; align-items: flex-end; gap: 12px; }
+.lo-idx {
+  flex: 0 0 auto; font-family: var(--font-title); font-size: 46px; font-weight: 700; line-height: .92;
+  color: color-mix(in srgb, var(--lo-accent) 34%, transparent); pointer-events: none;
+}
+.lo-skin {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--lo-accent) 26%, transparent);
+  background: rgba(255, 255, 255, .028);
+}
+.lo-thumb {
+  width: var(--lo-thumb); height: var(--lo-thumb); flex: 0 0 auto; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--lo-accent) 30%, transparent);
+  background: rgba(0, 0, 0, .35);   /* 仅作透明 PNG 的底衬 */
+  display: block; overflow: hidden;
+}
+/* 真实皮肤缩略图：同为 100%/cover */
+.lo-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lo-skin-meta { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.lo-skin-name { font-size: 13.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lo-grade { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--lo-bright); }
+.lo-grade::before { content: ""; width: 2px; height: 13px; border-radius: 2px; background: var(--lo-accent); }  /* 品级竖线（沈妙卡转红） */
+
+/* ===== 控制区 ===== */
+.lo-controls { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 20px; }
+.lo-arrow {
+  width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--line); background: rgba(20, 17, 13, .7); color: var(--gold); cursor: pointer;
+  transition: border-color 200ms ease, color 200ms ease, transform 200ms ease;
+}
+.lo-arrow:hover { border-color: rgba(216, 181, 106, .6); color: var(--gold-2); }
+.lo-arrow:active { transform: scale(.94); }
+.lo-dots { display: flex; align-items: center; gap: 8px; }
+.lo-dots button {
+  width: 8px; height: 8px; padding: 0; border: none; border-radius: 999px;
+  background: rgba(232, 226, 212, .26); cursor: pointer;
+  transition: width 260ms cubic-bezier(.22, 1, .36, 1), background 260ms ease;
+}
+.lo-dots button.is-active { width: 22px; background: var(--gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lo-card, .lo-bar i, .lo-blob, .lo-track, .lo-dots button { transition: none !important; }
+}
