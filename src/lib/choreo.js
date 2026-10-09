@@ -467,8 +467,16 @@ function buildTianxuan(section) {
   // 波浪错峰改用单次 stagger：与原来逐个 delay 的观感一致，但 tween 数从 N 降到 3
   // （gsap-performance：同一种动画用 stagger，避免 N 份独立 tween 与合成层提示）
   if (gridCards.length) {
-    // ① 卡面：复合入场（位移 34 + 缩放 .94→1 + 模糊 6→0），对角波错峰
-    tl.fromTo(gridCards, CARD_FROM, { ...CARD_TO, stagger: gridStagger(gridCards, GRID_STAGGER) }, t4)
+    /* ① 卡面：复合入场（位移 34 + 缩放 .94→1），对角波错峰
+       2026-10 卡顿修复（第 2 项）：天选 14 张卡不再带入场 filter: blur(6px)。
+       依据 tools/probes/scroll-jank.mjs（同会话 5 条目 × 4 轮交错、每轮轮换顺序、
+       禁用 HTTP 缓存）：去掉卡面 ::after 描边光晕后热区中位 stallMs 521ms，
+       再关掉 blur → 465ms（−11%）；filter 逐帧变化会让 14 张卡各自重新光栅化，
+       而 blur 只是在 0.95s 内由 6px 收束到 0，位移 + 缩放 + 淡入的入场语汇保留。
+       征神卡组（buildZhengshen）仍用 CARD_FROM / CARD_TO，观感未改动。 */
+    const txCardFrom = { opacity: 0, y: 34, scale: 0.94 }
+    const txCardTo = { opacity: 1, y: 0, scale: 1, duration: 0.95, ease: EASE, clearProps: 'transform' }
+    tl.fromTo(gridCards, txCardFrom, { ...txCardTo, stagger: gridStagger(gridCards, GRID_STAGGER) }, t4)
     // ② 卡内三层：框 → 指标名 → 数值（与卡面同一套对角波，逐层延后 0.08s）
     if (statLabels.length) tl.fromTo(statLabels, LABEL_FROM, { ...LABEL_TO, stagger: gridStagger(statLabels, GRID_STAGGER) }, t4 + 0.14)
     if (statValues.length) tl.fromTo(statValues, VALUE_FROM, { ...VALUE_TO, stagger: gridStagger(statValues, GRID_STAGGER) }, t4 + 0.22)

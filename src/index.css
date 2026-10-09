@@ -1179,6 +1179,22 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .grid-scan { display: none; } }
 
+/* ---------- 天选卡组：描边光晕「按需存在」（2026-10 滚动卡顿修复，第 1 项） ----------
+   .magic-bento-card--border-glow::after 是一层 mask-composite: exclude 的径向渐变遮罩层。
+   指针不在卡组上时它的 --glow-intensity 为 0、渐变整体 alpha=0（实测 computed
+   background-image 全是 rgba(212,175,88,0)，即「看不见」），但图层依然存在：
+   卡片入场每帧改 transform/filter 时，这层遮罩要跟着重新光栅化 —— 纯滚动时白付成本。
+
+   实测（tools/probes/scroll-jank.mjs，同会话 5 条目 × 4 轮交错、每轮轮换顺序、禁用
+   HTTP 缓存、热区 y1950–2757 中位 stallMs）：base 683 → 去掉该层（::after{display:none}）
+   521ms（−24%），热区 >33ms 帧 11 → 4、>100ms 停顿 1/4 轮 → 0/4 轮。
+
+   做法：指针不在卡组上时干脆不要这层（content: none），指针进入卡组才生成 ——
+   与改前观感逐帧一致（指针不在时它本来就是全透明的），只是不再白付光栅化。
+   范围限本卡组：#tianxuan。征神 / 无间两处卡组沿用同一组件，未改动。 */
+#tianxuan .magic-bento-card--border-glow::after { content: none; }
+#tianxuan .magic-bento-grid:hover .magic-bento-card--border-glow::after { content: ''; }
+
 /* ③ 版块标题块微视差：与 .seg-aura 同一个 scrub 驱动（segments.js 直接写 y，此处不预设 transform，
    避免与 GSAP 内联值互相覆盖）。这一层不被 choreo/fx 触碰（它们只动 .mode-head 的子元素）。 */
 
