@@ -2108,6 +2108,34 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   .hero-detail-btn { width: min(100%, 320px); }
 }
 
+/* ---------- 手机端（≤560px）：比例适配 ----------
+   实测（tools/probes/mobile-audit.mjs，390×844 dpr3，CSS 视口 390 / 容器 92vw=359px）：
+   · `.stat-grid` 的 minmax(200px,1fr) 在 359px 容器里只放得下 1 列 → 14 张数据卡竖排，
+     天选段被撑到 3477px；`.treasure-grid`（minmax 250px）同样退化成 1 列；
+   · `.mode-section` 的 130px 与 `.closing-inner` 的 140px 上下留白，在手机上等于空掉小半屏；
+   · `.stat-card` 的 26px 内边距是按桌面 ~240px 卡宽定的，两列后卡宽仅约 168px。
+   因此这里显式给栅格两列，并把纵向留白与卡内边距按手机比例收一档；
+   桌面（>560px）完全不受影响。 */
+@media (max-width: 560px) {
+  .stat-grid,
+  .stat-grid--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+  .treasure-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .card-grid--3 { grid-template-columns: minmax(0, 1fr); }
+
+  .stat-card { padding: 16px 16px 14px; }
+  .stat-card-value { font-size: clamp(22px, 6.4vw, 28px); }
+  .stat-card-label { font-size: 12.5px; }
+
+  .mode-section { padding: 72px 0; }
+  .mode-head { margin-bottom: 40px; }
+  .closing-inner { padding: 88px 0 44px; }
+  .closing-title { font-size: clamp(30px, 8.6vw, 40px); }
+  .closing-subtitle { margin-bottom: 36px; }
+
+  /* 首屏 4 字标题在 390px 上用 50.7px 会吃掉整屏宽，收一档并保留 clamp 下限可读性 */
+  .hero-title { font-size: clamp(40px, 12.4vw, 54px); }
+}
+
 /* ════════════════════════════════════════════════════════════
    动效升级 v2（GSAP 全权接管入场，本区只加动画行为，不改视觉）
    ════════════════════════════════════════════════════════════ */
