@@ -12,6 +12,8 @@ import initSiteMotion, { initHover, initScrollReveals, initSmoothScroll } from '
 import initChoreo from './lib/choreo'
 import initFx from './lib/fx'
 import initJoins, { computeLanding } from './lib/join'
+import initSegments from './lib/segments'
+import initSectionBg from './lib/sectionBg'
 import { effects } from './data/stats'
 
 /**
@@ -121,6 +123,12 @@ export default function App() {
     const cleanupChoreo = initChoreo()
     const cleanupFx = initFx()
     initJoins()
+    // ③ 版块滚动驱动层：每段一个 scrub（氛围层位移 + 标题块微视差）。
+    //    放在统一启动序列第 ④ 步 → 按最终落点评估；随后由第 ⑤ 步统一 refresh。
+    const cleanupSegments = initSegments()
+    // ④ 全站背景色：滚到哪个板块，body 底色就换成那一档（IntersectionObserver，不碰滚动）。
+    //    放在定位之后 —— 它初始化时会同步量一次当前布局，hash 直达板块时底色直接就是对的，不会闪。
+    const cleanupSectionBg = initSectionBg()
 
     // 5 首帧后再统一刷新：定位已完成，避免 refresh 在首次绘制前强制整页布局
     // refresh 会触发 ScrollTrigger 的回写 → 紧随其后再锁一次
@@ -163,6 +171,8 @@ export default function App() {
       deferredTimers.forEach((id) => window.clearTimeout(id))
       window.removeEventListener('resize', onWindowResize)
       if (resizeRaf) cancelAnimationFrame(resizeRaf)
+      cleanupSectionBg?.()
+      cleanupSegments?.()
       cleanupFx?.()
       cleanupChoreo?.()
       cleanupLenis?.()

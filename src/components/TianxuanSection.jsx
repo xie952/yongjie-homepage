@@ -1,10 +1,32 @@
 import ModeSection from './ModeSection'
 import TabGroup from './TabGroup'
 import StatCard from './StatCard'
+import MagicBento from './MagicBento/MagicBento'
 import RankBadge from './RankBadge'
-import HeroCard from './HeroCard'
-import WeaponCard from './WeaponCard'
+import LoadoutCarousel from './LoadoutCarousel/LoadoutCarousel'
 import { tianxuan } from '../data/stats'
+
+/* 合并区块的 7 张卡：英雄 3 + 武器 4（顺序即 01~07）。
+   主题判定：沈妙 → red，其余英雄 → hero 金，武器 → weapon 金铜；
+   皮肤名与品级取 stats.js 既有字段（name / label），使用率随 Tab 走 useByMode。 */
+const LOADOUT_ITEMS = [
+  ...tianxuan.heroes.map((h) => ({
+    kind: '英雄',
+    theme: h.name === '沈妙' ? 'red' : 'hero',
+    name: h.name,
+    usageByMode: h.useByMode,
+    portrait: h.avatar,                                  // 既有头像图：/hero-avatar-hadi.png 等
+    skin: { name: h.skins[0].name, grade: h.skins[0].label || '极品', image: h.skins[0].imageUrl },  // 既有皮肤图
+  })),
+  ...tianxuan.weapons.map((w) => ({
+    kind: '武器',
+    theme: 'weapon',
+    name: w.name,
+    usageByMode: w.useByMode,
+    portrait: w.image,                                   // 既有武器图标：/Quanren.PNG 等
+    skin: { name: w.skins[0].name, grade: w.skins[0].label || '极品', image: w.skins[0].imageUrl },
+  })),
+]
 
 /**
  * 天选之人版块：
@@ -74,9 +96,19 @@ function ModePanel({ modeId }) {
         )}
       </div>
 
-      {/* 常规指标 14 卡：同一网格语言，层叠错峰入场 */}
-      <div className="stat-grid" data-reveal-group>
-        {SOLO_METRICS.map((m, i) => (
+      {/* 常规指标 14 卡：同一网格语言，层叠错峰入场。
+          卡片容器交给 MagicBento（React Bits）：全局聚光 + 邻近卡泛金光 + 点击金色涟漪。
+          · items 就是既有的 SOLO_METRICS —— 数据源 / 数值 / 数字滚动一律不动
+          · gridClassName="stat-grid" → 列定义、间距、margin 全部沿用现有数据卡网格，
+            不使用组件默认的 4 栏 / 0.5em gap / 0.75em padding
+          · renderItem 直接复用既有 <StatCard>（左上角切角 + 指标名 + 金色数值 + 数字滚动），
+            不使用组件默认的 header(label) + content(title, desc) 结构
+          · data-reveal-group 保留 → 既有入场涟漪照旧生效，与 MagicBento 效果叠加 */}
+      <MagicBento
+        items={SOLO_METRICS}
+        gridClassName="stat-grid"
+        gridProps={{ 'data-reveal-group': true }}
+        renderItem={(m, i) => (
           <StatCard
             key={m.key}
             label={m.label}
@@ -87,29 +119,13 @@ function ModePanel({ modeId }) {
             format={m.format}
             index={i}
           />
-        ))}
-      </div>
+        )}
+      />
 
-      {/* 常用英雄 + 武器 */}
-      <div className="loadout-grid">
-        <div className="loadout-col">
-          <h4 className="loadout-title" data-reveal="up">常用英雄</h4>
-          <div className="card-grid" data-reveal-group>
-            {tianxuan.heroes.map((h) => (
-              <HeroCard key={h.name} hero={h} usage={h.useByMode[modeId] || 0} />
-            ))}
-          </div>
-        </div>
-
-        <div className="loadout-col">
-          <h4 className="loadout-title" data-reveal="up">常用武器</h4>
-          <div className="card-grid" data-reveal-group>
-            {tianxuan.weapons.map((w) => (
-              <WeaponCard key={w.name} weapon={w} usage={w.useByMode[modeId] || 0} />
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* 常用英雄 & 武器：合并为单一区块（7 卡单行 3D 渐变轮播）
+          规格与单文件原型 public/loadout-carousel.html 一致；使用率随当前 Tab（单/双/三排）联动。
+          逐卡主题色：英雄金 / 沈妙红 / 武器金铜，由组件内的 THEMES 表给出，取 stats.js 的 kind 判定。 */}
+      <LoadoutCarousel items={LOADOUT_ITEMS} modeId={modeId} />
     </div>
   )
 }

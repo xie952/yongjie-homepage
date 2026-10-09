@@ -7,21 +7,23 @@ import { player, closing, tianxuan, zhengshen, wujian } from '../data/stats'
  * 页面底部展示"数据更新于 X 天前"（取三个模式中最近的一个日期计算）。
  */
 export default function ContactSection() {
-  const [copied, setCopied] = useState(false)
+  /* 复制反馈记「复制的是哪一项」（'' | 'id'）—— 原本还有微信/社区两张卡，
+     2026-10-02 按要求把那一块整体删掉，现在只剩游戏 ID 一处。 */
+  const [copiedKey, setCopiedKey] = useState('')
 
-  const copyId = async () => {
+  const copy = async (text, key) => {
     try {
-      await navigator.clipboard.writeText(closing.contact.gameId)
+      await navigator.clipboard.writeText(text)
     } catch {
       const ta = document.createElement('textarea')
-      ta.value = closing.contact.gameId
+      ta.value = text
       document.body.appendChild(ta)
       ta.select()
       document.execCommand('copy')
       document.body.removeChild(ta)
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
+    setCopiedKey(key)
+    setTimeout(() => setCopiedKey(''), 1800)
   }
 
   // 三个模式里最近的更新日期
@@ -37,27 +39,14 @@ export default function ContactSection() {
 
       <div className="container closing-inner">
         <div className="closing-head" data-reveal-group>
-          <p className="closing-kicker" data-reveal="up">— 江湖路远 · 后会有期 —</p>
           <h2 className="closing-title" data-split>{closing.title}</h2>
           <p className="closing-subtitle" data-reveal="up">{closing.subtitle}</p>
         </div>
 
         <div className="closing-contact" data-reveal="up">
-          <button className="btn btn-primary btn-lg" onClick={copyId} aria-live="polite">
-            {copied ? '游戏ID已复制 ✓' : `复制游戏ID：${closing.contact.gameId}`}
+          <button className="btn btn-primary btn-lg" onClick={() => copy(closing.contact.gameId, 'id')} aria-live="polite">
+            {copiedKey === 'id' ? '游戏ID已复制 ✓' : `复制游戏ID：${closing.contact.gameId}`}
           </button>
-
-          <div className="closing-links">
-            <span className="closing-link">
-              <span className="closing-link-label">微信</span>
-              <span className="closing-link-value">{closing.contact.wechat}</span>
-            </span>
-            <span className="closing-sep" aria-hidden="true" />
-            <a className="closing-link" href="https://discord.com/" target="_blank" rel="noopener noreferrer">
-              <span className="closing-link-label">社区</span>
-              <span className="closing-link-value">{closing.contact.discord}</span>
-            </a>
-          </div>
         </div>
 
         <footer className="closing-foot">
@@ -77,14 +66,23 @@ function latestUpdateDate() {
   const dates = [tianxuan.lastUpdated, zhengshen.lastUpdated, wujian.lastUpdated]
     .map((d) => new Date(d + 'T00:00:00'))
     .sort((a, b) => b - a)
-  const latest = dates[0]
-  // 格式化成 YYYY-MM-DD
-  return latest.toISOString().slice(0, 10)
+  // ⚠️ 不能写成 dates[0].toISOString().slice(0, 10)：toISOString 走 UTC，
+  // 东八区下"本地零点"会被折回前一天（2026-09-14 → 2026-09-13），页脚日期平白少一天。
+  // 这里按【本地】年月日拼串，与 daysSince() 的"本地零点"口径保持一致。
+  return formatLocalDate(dates[0])
 }
 
-// 距今天数（按自然日）
+// 本地日期 → YYYY-MM-DD（全程本地时区，不经过 UTC）
+function formatLocalDate(d) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// 距今天数（本地零点 → 本地零点，按自然日）
 function daysSince(dateStr) {
-  const today = new Date()
+  const now = new Date()
+  // 今天也要取本地零点：若直接用 new Date()（带时分秒），下午访问会比上午多算一天
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const d = new Date(dateStr + 'T00:00:00')
   const diff = today - d
   return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)))

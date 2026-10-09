@@ -1,5 +1,7 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import ModeSection from './ModeSection'
+import AnimatedList from './AnimatedList/AnimatedList'
+import MagicBento from './MagicBento/MagicBento'
 import StatCard from './StatCard'
 import BuildDetailModal from './BuildDetailModal'
 import { zhengshen } from '../data/stats'
@@ -26,10 +28,27 @@ const SHIDIAN_ROWS = SHIDIAN_TIERS.flatMap((name) =>
   }))
 )
 
+// 征神数量指标：原来是三张内联 <StatCard>；接入 MagicBento 后容器需要数组形式，
+// 故抽成常量。key 就是 zhengshen 上的字段名，数据源与取值方式完全没变。
+const ZS_METRICS = [
+  { key: 'matches',      label: '对局数量' },
+  { key: 'seals',        label: '英雄印' },
+  { key: 'achievements', label: '成就' },
+]
+
 export default function ZhengshenSection() {
   const d = zhengshen
   const stage = d.shidianStage || '神伐'
   const layer = d.shidianLayer
+
+  // 十殿门列表数据：段位行（青铜01 … 坠日02）+ 终点行（神伐 / 历史最高 / 层数）。
+  // 数据源就是本文件模块级的 SHIDIAN_TIERS / SHIDIAN_LAYERS_PER_TIER —— 本站**没有**把段位表
+  // 放进 stats.js（那里只有 zhengshen.shidianStage / shidianLayer 两个读数），所以就地派生。
+  // 列表组件不硬编码任何一行，行数增减只改上面的常量。
+  const shidianItems = useMemo(
+    () => [...SHIDIAN_ROWS, { name: stage, idx: layer, final: true }],
+    [stage, layer]
+  )
 
   // 详情弹窗：纯内存态，**不写 hash**（站内 hash 要留给版块定位，写进去会复发定位时序 bug）
   const [detail, setDetail] = useState(null)
@@ -61,42 +80,73 @@ export default function ZhengshenSection() {
 
           {/* 层级列表：纵向可滚。视口约 4 整行 + 第 5 行露约 40%，本身就是可滑暗示。
               终点行是全程唯一的强调行（金色）；文案固定「历史最高」——口径是历史最高，
-              不写当前赛季分 / 实时分。tabIndex 让这个可滚区域键盘可达。
-              无逐行 stagger：整卡的入场由 choreo 统一编排，这里不叠第二套动画。 */}
-          {/* data-lenis-prevent 是必须的：本项目全局启了 Lenis 平滑滚动（smoothWheel: true），
+              不写当前赛季分 / 实时分。
+
+              逐行入场交给 React Bits 的 AnimatedList（见 components/AnimatedList/）：
+              每行进入视口 50% 时从 scale .7 + opacity 0 浮现，delay = 0.06 × 行号，
+              滚出视口回退、滚回来重播。它替代了原先「列表内不叠第二套动画」的做法 ——
+              现在这一列表有自己的逐行节奏，卡片本身的入场编排不受影响。
+
+              data-lenis-prevent 仍然必须：本项目全局启了 Lenis 平滑滚动（smoothWheel: true），
               Lenis 的滚轮处理只有碰到这个属性才会提前 return 放行原生滚动（lenis.mjs:609-612）；
-              否则它会 event.preventDefault() 把滚轮全部吃掉去滚整页 —— 这个内层列表就永远滚不动。 */}
-          <ul
-            className="zs-shidian-list"
-            tabIndex={0}
-            data-lenis-prevent
-            aria-label="十殿门历史最高层级列表"
-          >
-            {SHIDIAN_ROWS.map((row) => (
-              <li key={`${row.name}-${row.idx}`} className="zs-shidian-row">
+              否则它会 event.preventDefault() 把滚轮全部吃掉去滚整页 —— 这个内层列表就永远滚不动。
+              下面通过 scrollProps 落到 AnimatedList 真正的滚动容器 .scroll-list 上。
+              tabIndex 同理：可滚区域必须键盘可达（读屏/键盘用户否则到不了这段内容）；
+              本站关掉了组件的键盘导航，靠的就是这个原生可聚焦容器 + 原生方向键滚动。 */}
+          <AnimatedList
+            items={shidianItems}
+            /* 段位行目前无点击行为：不接弹窗，保留接口 */
+            onItemSelect={undefined}
+            /* 上下渐隐是本效果的核心，保留 */
+            showGradients
+            /* 关闭：组件把 keydown 绑在 window 上，会劫持全页 ↑↓ / Tab / Enter，
+               与 hash 定位及后续可能的键盘交互冲突 */
+            enableArrowNavigation={false}
+            displayScrollbar
+            /* 逐行浮现：第 i 行延迟 0.06s（组件默认固定 0.1s） */
+            itemDelay={0.06}
+            className="zs-shidian-anim"
+            scrollClassName="zs-shidian-list"
+            scrollProps={{
+              tabIndex: 0,
+              role: 'list',
+              'data-lenis-prevent': true,
+              'aria-label': '十殿门历史最高层级列表',
+            }}
+            /* 每行外面还有一层组件的包装元素，list 语义要挂在它上面才成立 */
+            itemWrapperProps={{ role: 'listitem' }}
+            renderItem={(row, index, { selected }) => (
+              <div
+                className={
+                  'zs-shidian-row'
+                  + (row.final ? ' zs-shidian-row--final' : '')
+                  + (selected ? ' is-hover' : '')
+                }
+              >
                 <span className="zs-shidian-name">{row.name}</span>
+                {row.final && <span className="zs-shidian-badge">历史最高</span>}
                 <span className="zs-shidian-idx">{row.idx}</span>
-              </li>
-            ))}
-            <li className="zs-shidian-row zs-shidian-row--final">
-              <span className="zs-shidian-name">{stage}</span>
-              <span className="zs-shidian-badge">历史最高</span>
-              <span className="zs-shidian-idx">{layer}</span>
-            </li>
-          </ul>
+              </div>
+            )}
+          />
         </div>
       </div>
 
-      {/* 数量指标：层叠错峰 */}
-      <div className="stat-grid" data-reveal-group>
-        <StatCard label="对局数量" value={d.matches} />
-        <StatCard label="英雄印" value={d.seals} />
-        <StatCard label="成就" value={d.achievements} />
-      </div>
+      {/* 数量指标：接入 MagicBento（与天选板块同一套改法）
+          · gridClassName="stat-grid" → 列定义 / 间距 / margin 沿用站内定义（3 卡，与天选板块同源）
+          · renderItem 直接复用既有 <StatCard>（左上角切角 + 指标名 + 金色数值 + 数字滚动）
+          · data-reveal-group 保留 → 既有入场涟漪照旧生效 */}
+      <MagicBento
+        items={ZS_METRICS}
+        gridClassName="stat-grid"
+        gridProps={{ 'data-reveal-group': true }}
+        renderItem={(m) => <StatCard label={m.label} value={d[m.key]} />}
+      />
 
       {/* 英雄 + 魂玉搭配卡片 */}
       <h4 className="loadout-title" data-reveal="up">常用英雄 · 魂玉搭配</h4>
-      <div className="card-grid card-grid--3" data-reveal-group>
+      {/* data-reveal-group="fan" = 由中心向两侧入场；条数变化自动适配（0/1/2 张都有定义） */}
+      <div className="card-grid card-grid--3" data-reveal-group="fan">
         {d.heroBuilds.map((hb) => (
           <article
             key={hb.name}

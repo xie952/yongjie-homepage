@@ -1,6 +1,6 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { revealCard } from './animations'
+import { revealCardGroup } from './animations'
 import initFluidHero from './fluid'
 import { effects } from '../data/stats'
 
@@ -95,8 +95,10 @@ export function playHeroMotion(onComplete) {
   const sloganChars = slogan ? Array.from(slogan.querySelectorAll('.hero-slogan-char')) : []
   const actions = document.getElementById('hero-ink-actions')
   const detailButton = actions?.querySelector('.hero-detail-btn')
-  // 注意：动画必须挂在内层面板 .dock-panel 上——外层 .dock 靠 CSS translateX(-50%) 居中，
-  // GSAP 写 y 会整体覆盖该 transform，导致 Dock 水平偏移（移动端会把末尾项挤出视口）
+  // 动画挂在内层面板 .dock-panel 上。2026-09-25 起外层 .dock 已改为「left/right:0 + flex 居中」，
+  // 自身不再依赖 transform，内外两层都能安全做动效；这里维持内层，改动面最小。
+  // （旧写法：外层靠 CSS translateX(-50%) 居中，GSAP 一写 y 就整体覆盖该 transform，
+  //   导致 Dock 水平偏移、移动端末尾项被挤出视口。）
   const dockPanel = document.querySelector('.dock-panel')
 
   const tl = gsap.timeline({ defaults: { ease: EASE } })
@@ -693,6 +695,41 @@ export function initHeroPause() {
 }
 
 /* ──────────────────────────────────────────────────────────
+ * 六d、色彩呼吸（P1，2026-09-22 新增）
+ *   参考 phantom 首页的「氛围球多色渐变呼吸 / 霓虹发光文字变色呼吸」：
+ *   那两处动的**不是** background / color 本身，而是一组 CSS 颜色变量，
+ *   渐变与 text-shadow 跟着变量一起变。
+ *   这里用 GSAP 直接补间 CSS 自定义属性（GSAP 对自定义属性做颜色插值）——
+ *   所以**不需要 @property 注册**，也不引入任何新依赖。
+ *   两个目标都是「已存在的元素 + 把写死的色值换成变量」，变量起始值 = 改前的值
+ *   → JS 未运行 / reduced-motion 时渲染与改动前逐字一致（可零风险回退）。
+ *   视口外一律 pause()，与 initBreathPause / initHeroPause 同一套 IO 约定。
+ * ────────────────────────────────────────────────────────── */
+export function initColorBreath() {
+  if (isReduce()) return
+
+  const bind = (el, vars, duration) => {
+    if (!el || el.dataset.colorBreathBound) return
+    el.dataset.colorBreathBound = '1' // 单例：切 Tab / 重复 init 不叠加 tween
+    const tw = gsap.to(el, { ...vars, duration, yoyo: true, repeat: -1, ease: 'sine.inOut' })
+    if (!('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => (entry.isIntersecting ? tw.play() : tw.pause()))
+    }, { rootMargin: '150px 0px' })
+    io.observe(el)
+    el._colorBreathIO = io
+  }
+
+  // 目标 1｜首屏「氛围球」：两团墨迹光晕，各走一条独立色相 —— 时长 9s / 13s 互质错相位，
+  //   冷墨蓝 与 主题金 之间缓慢往复
+  bind(document.querySelector('#top .ink-1'), { '--ink-1-c': 'rgba(146, 186, 255, .18)' }, 9)
+  bind(document.querySelector('#top .ink-2'), { '--ink-2-c': 'rgba(212, 175, 88, .14)' }, 13)
+
+  // 目标 2｜「发光文字」：征神之路的金色数码大字，辉光在金色与暖白之间呼吸
+  bind(document.querySelector('.zs-big'), { '--zs-glow': 'rgba(255, 236, 182, .58)' }, 7)
+}
+
+/* ──────────────────────────────────────────────────────────
  * 七、魂玉词条依次点亮（卡片入场后，间隔 100ms）
  * ────────────────────────────────────────────────────────── */
 export function initJadeLight() {
@@ -837,6 +874,7 @@ export default function initFx() {
   initRarityGlow()
   initBreathPause()
   initHeroPause()
+  initColorBreath()
   initJadeLight()
   initCopyPulse()
 
@@ -897,21 +935,9 @@ export default function initFx() {
         })
       })
 
-      // 3. 新面板内卡片中心展开（元素无 bound 标记 → 绑定）
-      document.querySelectorAll('.tab-panel [data-reveal-group]').forEach((group) => {
-        const cards = Array.from(group.children).filter(
-          (c) => c.dataset.reveal !== 'none' && !c.hasAttribute('data-reveal-group')
-        )
-        if (!cards.length) return
-        const total = cards.length
-        cards.forEach((card, i) => {
-          const center = (total - 1) / 2
-          const dist = i - center
-          const delay = Math.abs(dist) * 0.12
-          const fromX = Math.abs(dist) < 0.001 ? 0 : (dist < 0 ? 1 : -1) * (60 + Math.floor(Math.abs(dist) + 0.5) * 20)
-          revealCard(card, delay, fromX)
-        })
-      })
+      // 3. 新面板内卡片组入场编排（新 DOM 元素无 bound 标记 → revealCardGroup 正常接管）
+      //    与首屏 / 锚点跳转共用 animations.js 里同一份编排算法
+      document.querySelectorAll('.tab-panel [data-reveal-group]').forEach((group) => revealCardGroup(group))
 
       // 2b. 新面板内 tilt 卡片补绑定（新 DOM 无 tilt-bound 标记 → 正常注入剑光/光晕）
       panel?.querySelectorAll('.hero-card, .weapon-card, .build-card').forEach(bindTiltCard)

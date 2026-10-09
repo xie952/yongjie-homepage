@@ -24,6 +24,60 @@ gsap.registerPlugin(ScrollTrigger)
 const EASE = [0.22, 1, 0.36, 1]
 const reduce = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+/* 数据网格的「单元格」判定：
+   ⚠ 接入 MagicBento 之后（§11/§12），网格的直接子元素变成 .magic-bento-card，
+     .stat-card 被包在它里面；若仍按 .stat-card 过滤直接子元素会得到空数组，
+     结果就是 14 张天选卡 + 3 张征神卡静默失去入场动画（浏览器实测 0/14、0/3）。
+   这里两种结构都认，两个板块共用同一判定。 */
+function isStatCell(el) {
+  return el.classList.contains('stat-card') || el.classList.contains('magic-bento-card')
+}
+
+/* 卡片组的错峰步长（stagger 用同一个值，保证整组节奏一致） */
+const GRID_STAGGER = 0.06
+
+/* ── 卡片复合入场语言 ─────────────────────────────────────────
+   借 React Bits「AnimatedContent」的入场语汇（位移 + 缩放 + 透明度 + 时长 + 缓动），
+   再叠加本站既有的模糊归位。
+   ⚠ 只借语言、不引入它的系统：AnimatedContent 是「每个实例自建一条 GSAP timeline + 一个 ScrollTrigger」，
+     直接包住这 17 张卡会与 choreo 的整段编排抢同一元素的 transform（违反「一个元素一个 transform 源」），
+     并额外多出 17 个 ST。所以这里用 choreo 既有时间轴统一驱动。
+   改前卡片只有「位移 24px + blur(4px)」，且按 DOM 顺序逐行推进 —— 观感单一就出在这里。 */
+const CARD_FROM = { opacity: 0, y: 34, scale: 0.94, filter: 'blur(6px)' }
+const CARD_TO = { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.95, ease: EASE, clearProps: 'filter,transform' }
+const LABEL_FROM = { opacity: 0, y: 8 }
+const LABEL_TO = { opacity: 1, y: 0, duration: 0.45, ease: EASE, clearProps: 'transform' }
+const VALUE_FROM = { opacity: 0, y: 10 }
+const VALUE_TO = { opacity: 1, y: 0, duration: 0.5, ease: EASE, clearProps: 'transform' }
+
+/* 网格几何 → GSAP 的 grid 交错参数：axis:null = 按二维距离从起点向外递进（对角波）。
+   比「DOM 顺序逐行推进」更像一次有方向的编排，且仍然只用一条 tween（stagger 由 GSAP 内部展开）。
+   行数/列数就地量取，列数变化（窄屏塌成单列）自动适配，不写任何断点常量。 */
+function gridStagger(cells, each) {
+  if (cells.length < 3) return { each: each }
+  const rects = cells.map((c) => c.getBoundingClientRect())
+  const tops = rects.map((r) => r.top)
+  const bottoms = rects.map((r) => r.bottom)
+  const heights = rects.map((r) => r.height).filter((h) => h > 0)
+  const rowH = heights.length ? Math.min.apply(null, heights) : 1
+  const rows = Math.max(1, Math.round((Math.max.apply(null, bottoms) - Math.min.apply(null, tops)) / rowH))
+  const cols = Math.max(1, Math.ceil(cells.length / rows))
+  return { each: each, grid: [rows, cols], from: 'start', axis: null }
+}
+
+/* 网格扫描线：卡片落位期间一道金色光束从左扫过（一次性，播完即移除 DOM）。
+   整幅渐变层 + translateX 实现 —— 元素与网格同尺寸，百分比位移才与网格对齐；
+   渐变两端透明 → 不需要给网格加 overflow:hidden，也不会在网格外露出硬边。 */
+function gridScan(tl, grid, at) {
+  if (!grid) return
+  const scan = document.createElement('span')
+  scan.className = 'grid-scan'
+  scan.setAttribute('aria-hidden', 'true')
+  grid.appendChild(scan)
+  tl.fromTo(scan, { xPercent: -100, opacity: 0 }, { xPercent: 100, opacity: 1, duration: 1.05, ease: 'none' }, at)
+  tl.to(scan, { opacity: 0, duration: 0.22, onComplete: () => scan.remove() }, at + 1.0)
+}
+
 /* 简单数字滚动（choreo 内部使用，千分位，整数） */
 function rollNumber(el, target, dur = 1.2) {
   if (!el) return
@@ -344,7 +398,7 @@ function buildTianxuan(section) {
   const rankRow = panel?.querySelector('.mode-rank-row')
   const rankBadge = rankRow?.querySelector('.rank-badge')
   const statGrid = panel?.querySelector('.stat-grid')
-  const statCards = statGrid ? Array.from(statGrid.children).filter((c) => c.classList.contains('stat-card')) : []
+  const statCards = statGrid ? Array.from(statGrid.children).filter(isStatCell) : []
   const loadoutCols = panel ? Array.from(panel.querySelectorAll('.loadout-col')) : []
 
   let t = 0
@@ -406,25 +460,33 @@ function buildTianxuan(section) {
   // rank-row 内的积分卡最先 + stat-grid 卡片（按 DOM 顺序 → 波浪顺序）
   if (rankRow) rankRow.querySelectorAll('.stat-card').forEach((c) => gridCards.push(c))
   statCards.forEach((c) => gridCards.push(c))
+  // 卡内二级元素：指标名 / 数值（卡面第一层入场后各自再错峰浮现）
+  const statLabels = gridCards.map((c) => c.querySelector('.stat-card-label')).filter(Boolean)
+  const statValues = gridCards.map((c) => c.querySelector('.stat-card-value')).filter(Boolean)
   let t4 = t3 + 0.9 * 0.7
-  gridCards.forEach((card, i) => {
-    tl.fromTo(card,
-      { opacity: 0, y: 24, filter: 'blur(4px)' },
-      {
-        opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.85,
-        delay: i * 0.07, clearProps: 'filter,transform',
-      },
-      t4)
-  })
+  // 波浪错峰改用单次 stagger：与原来逐个 delay 的观感一致，但 tween 数从 N 降到 3
+  // （gsap-performance：同一种动画用 stagger，避免 N 份独立 tween 与合成层提示）
+  if (gridCards.length) {
+    // ① 卡面：复合入场（位移 34 + 缩放 .94→1 + 模糊 6→0），对角波错峰
+    tl.fromTo(gridCards, CARD_FROM, { ...CARD_TO, stagger: gridStagger(gridCards, GRID_STAGGER) }, t4)
+    // ② 卡内三层：框 → 指标名 → 数值（与卡面同一套对角波，逐层延后 0.08s）
+    if (statLabels.length) tl.fromTo(statLabels, LABEL_FROM, { ...LABEL_TO, stagger: gridStagger(statLabels, GRID_STAGGER) }, t4 + 0.14)
+    if (statValues.length) tl.fromTo(statValues, VALUE_FROM, { ...VALUE_TO, stagger: gridStagger(statValues, GRID_STAGGER) }, t4 + 0.22)
+    // ③ 金色扫描线：与卡片落位同刻起跑，扫完即移除
+    gridScan(tl, statGrid, t4 - 0.05)
+  }
   // stat 数字：React StatCard(useCountUp) 自带入场滚动，无需 choreo 干预
 
   // —— 5. 常用英雄 + 常用武器（loadout 两列，各自标题 + 卡组中心展开） ——
-  const lastDelay = Math.max(0, gridCards.length - 1) * 0.07
+  // 末卡延迟：对齐 stagger；封顶 0.42s —— 14 张卡时否则会把「常用英雄/武器」推后近 1s
+  const lastDelay = Math.min(0.42, Math.max(0, gridCards.length - 1) * GRID_STAGGER)
   let t5 = t4 + 0.85 * 0.7 + lastDelay * 0.7
   loadoutCols.forEach((col, ci) => {
     const titleEl = col.querySelector('.loadout-title')
-    const grid = col.querySelector('.card-grid')
-    const cards = grid ? Array.from(grid.children).filter((c) => c.classList.contains('hero-card') || c.classList.contains('weapon-card')) : []
+    // 容器可能是 .card-grid（旧）或 .loadout-carousel（DepthCarousel 承载，卡片被包在轮播卡壳里），
+    // 所以用后代查询找卡 —— 换容器不影响这套入场编排。
+    const grid = col.querySelector('.loadout-carousel, .card-grid')
+    const cards = grid ? Array.from(grid.querySelectorAll('.hero-card, .weapon-card')) : []
     const colBase = t5 + ci * 0.2
     if (titleEl) tl.fromTo(titleEl, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6, clearProps: 'transform' }, colBase)
     // 中心展开：delay = |i - (n-1)/2| × 0.12
@@ -482,7 +544,7 @@ function buildZhengshen(section) {
   const statGrid = progress?.nextElementSibling?.classList?.contains('stat-grid')
     ? progress.nextElementSibling
     : section.querySelector('.zhengshen-progress + .stat-grid')
-  const statCards = statGrid ? Array.from(statGrid.children).filter((c) => c.classList.contains('stat-card')) : []
+  const statCards = statGrid ? Array.from(statGrid.children).filter(isStatCell) : []
 
   let t = 0
   if (no) tl.fromTo(no, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.7 }, t)
@@ -511,11 +573,14 @@ function buildZhengshen(section) {
   if (!Number.isNaN(levelTarget)) tl.call(() => rollNumber(levelNum, levelTarget), [], t2 + 0.35)
 
   let t3 = t2 + (progressCards.length - 1) * 0.15 * 0.7 + 1.0
-  statCards.forEach((card, i) => {
-    tl.fromTo(card,
-      { opacity: 0, y: 30, filter: 'blur(5px)' },
-      { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.85, clearProps: 'filter,transform' },
-      t3 + i * 0.12)
-  })
+  if (statCards.length) {
+    // 与天选同一套复合入场语言（3 张卡时对角波自动退化为顺序错峰）
+    tl.fromTo(statCards, CARD_FROM, { ...CARD_TO, stagger: gridStagger(statCards, 0.12) }, t3)
+    const zsLabels = statCards.map((c) => c.querySelector('.stat-card-label')).filter(Boolean)
+    const zsValues = statCards.map((c) => c.querySelector('.stat-card-value')).filter(Boolean)
+    if (zsLabels.length) tl.fromTo(zsLabels, LABEL_FROM, { ...LABEL_TO, stagger: 0.12 }, t3 + 0.14)
+    if (zsValues.length) tl.fromTo(zsValues, VALUE_FROM, { ...VALUE_TO, stagger: 0.12 }, t3 + 0.22)
+    gridScan(tl, statGrid, t3 - 0.05)
+  }
   return tl
 }

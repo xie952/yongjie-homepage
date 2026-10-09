@@ -18,7 +18,42 @@
   --verm:      #b03a2e;   /* 朱红 */
   --verm-2:    #e05a48;   /* 亮朱红 */
   --text:      #e8e2d4;   /* 主文字：米白 */
-  --muted:     #8f8878;   /* 次要文字 */
+  --muted:     #9a9382;   /* 次要文字（2026-10-02 抬亮：#8f8878 叠在收尾段 8% 白纱罩上只有 4.12:1，抬到下表的 4.75:1；色相不变，全站 25 处 --muted 文字一并受益） */
+
+  /* —— 版块主题色（② 版块反差 · 2026-10-01 改为「色相区分」）——
+     历史：先是 --bg / --bg-2 二分交替（相邻相对亮度差仅 1.14:1），再改成 4 档明度阶梯
+     --tone-0..3（相邻只差 ≈7/255）。用户实测两版都「看不出效果」——同一个暖色相上做明度微调，
+     在大面积深色背景上几乎不可辨（实测相邻板块的渲染像素 ΔE 仅 2~6，且 6 个段只用到 4 个值：
+     档案与征神同色、天选与收尾同色）。
+     现在改为 6 个版块各持一种色相：深墨 → 暖棕 → 深紫 → 深靛蓝 → 暗酒红 → 冷灰。
+     共同约束：L* 全部落在 4~12 的深色区间（保持深色武侠底子），只让色相说话，不靠整体提亮。 */
+  --tone-ink:    #12100e;   /* Hero     · 深墨（中性偏暖，全站的中性基点） */
+  --tone-amber:  #1d1710;   /* 玩家档案 · 暖棕（延续该段原有的深金倾向） */
+  --tone-violet: #1a1424;   /* 天选之人 · 深紫（延续该段原有的深紫倾向） */
+  --tone-navy:   #002333;   /* 征神之路 · 深靛蓝（2026-10-02 由 --tone-teal #10201f「深青」换色而来：用户不喜欢那里的绿。
+                               取 h=249°、L*=12.2、sRGB 色域内彩度上限的 100%：与旧绿 ΔE 12.7，与相邻的深紫 ΔE 14.1、暗酒红 ΔE 20.4 —— 
+                               换色本身看得见，且不会把「天选→征神」这条交界的落差吃掉（h 与深紫仍差 58°）。 */
+  --tone-wine:   #201414;   /* 无间镖客 · 暗酒红（呼应该段的朱红主色） */
+  --tone-slate:  #15161c;   /* 联系     · 冷灰（收尾段，色温冷下来） */
+
+  /* —— 全站背景色（2026-09-27）——
+     滚到哪个板块，body 底色就在 700ms 内换成该板块的 --sec-bg（按 id 分配到 --tone-*）。
+     默认值即 Hero 档：无 JS、或还没滚出首屏时，页面底色就是 Hero 的深墨。 */
+  --section-bg: var(--tone-ink);
+
+  /* —— 版块内卡面（② 卡片与版块的层次）——
+     实测改前卡片对版块底只有 1.04–1.14:1（几乎同色）。
+     --panel-sec 默认回退到全局面板色 → 不在版块内的卡片外观完全不变；
+     版块内由 #profile/#tianxuan/… 覆盖为 --card-surface（实测对比度 ≈1.7:1）。
+     想整体加减卡面亮度只改 --card-surface 一个值即可。 */
+  --panel-sec:      var(--panel);
+  --card-surface:   #3e3932;   /* 2026-09-25 二调：用户反馈偏亮，按 ~21% 线性亮度下调（#46403a → #3e3932） */
+  --muted-card:     #c0b69f;   /* 卡面被抬亮后的次要文字：维持 AA（≈5:1） */
+  --seg-tint:       rgba(212, 175, 88, .07);   /* 版块氛围层默认色（金） */
+  /* 自绘滚动条滑块（2026-10-02 一致性收口）：原为两个硬编码 hex（#2c2822 / #4a4236），
+     与全站调色板无关 —— 改为从主金色取 alpha。轨道也改用 --section-bg，随版块变色。 */
+  --scroll-thumb:       rgba(212, 175, 88, .30);
+  --scroll-thumb-hover: rgba(212, 175, 88, .48);
 
   /* —— 字体 —— */
   --font-cn: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
@@ -74,9 +109,17 @@
     0 0 20px rgba(212, 175, 88, .10);
 }
 
-/* 版块背景柔和过渡（相邻深浅块不生硬硬切） */
+/* ② 版块反差：底色仍读 --sec-bg（每段自己的主题色），未 assign 的段回退 Hero 档 --tone-ink。
+   2026-09-27：板块自己不再铺不透明底色 —— 底色统一交给 body 的 --section-bg（700ms 平滑过渡），
+   板块保持透明，色值只有 --tone-* 一处来源。
+   2026-10-01 补充：实测发现「板块透明」并不等于「body 底色看得见」—— 全站仅两处例外会盖住它，
+   分别是 Hero（.hero--cinema 自铺底色，见该规则）与档案段（cover 叠层下必须不透明，见文件末尾），
+   两处都已改成读同一套动画底色，不再各占一块死色。 */
 .mode-section, .closing {
-  background: linear-gradient(180deg, rgba(11, 10, 9, .0) 0%, var(--bg) 6%, var(--bg) 100%);
+  --seg-p: .5;   /* 滚动进度（segments.js 用 GSAP 写内联变量；这里是 CSS 兜底/中性位） */
+  --sec-bg: var(--tone-ink);
+  background: none;
+  isolation: isolate;   /* 让 .seg-aura 的 z-index:-1/0 只在版块内生效，不到处穿透 */
 }
 
 /* Hero 视频背景层架构（收官整合：video 缩放 / 视差 translate / 文本位移 分属不同元素）
@@ -215,7 +258,11 @@ html {
 }
 
 body {
-  background: var(--bg);
+  /* 全站背景色：由 src/lib/sectionBg.js 按「当前过半的板块」写 --section-bg（初始 = Hero 档 --tone-0）。
+     板块自己不再铺不透明底色，底色只有这一层 —— 所以过渡是整页一次，而不是各板块各切一次。
+     无 JS 环境保留 CSS 默认值，行为等同改前。 */
+  background-color: var(--section-bg);
+  transition: background-color 700ms ease;   /* 与轮播光晕的 700ms 同拍 */
   color: var(--text);
   font-family: var(--font-cn);
   font-size: 16px;
@@ -224,12 +271,20 @@ body {
   /* 用 clip 而不是 hidden：hidden 会让 body 成为滚动容器 → 破坏子元素的 position:sticky */
   overflow-x: clip;
 }
+/* 首屏落位不播过渡：hash 直达某板块时底色要直接就是那一档，不能先闪一下 Hero 色再渐变过去。
+   sectionBg.js 初始化时挂上，两帧后自动摘掉。
+   注：档案段那个不透明面的对应规则写在文件末尾它的 transition 规则【下面】—— 这里写没用，
+   同权重下会被后面那条覆盖（见 cover 叠层那段注释里的实测记录）。 */
+html.sec-bg-boot body { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }   /* 降级：底色瞬时切换，不做 700ms 渐变 */
+}
 
 /* 细金色滚动条（Chrome） */
 ::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: #2c2822; border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: #4a4236; }
+::-webkit-scrollbar-track { background: var(--section-bg, var(--bg)); }   /* 跟着版块底色走，不留一条固定色的边 */
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
 
 img { max-width: 100%; display: block; }
 a { color: inherit; text-decoration: none; }
@@ -248,12 +303,19 @@ section[id] { scroll-margin-top: 76px; }
    只有 .dock-panel 本身接收事件（滚轮再冒泡给 Lenis，页面照常滚动） */
 .dock {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   top: 16px;                 /* 顶部居中（原为底部 16px） */
-  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
   z-index: 300;              /* 高于叠层区块(z-index:2)与滚动进度条(200) */
-  max-width: calc(100vw - 24px);
   pointer-events: none;
+  /* 2026-09-25：居中方式由 left:50% + transform:translateX(-50%) 改为「左右贴边 + flex 居中」。
+     原因：原写法把居中寄托在 transform 上，任何 JS 往 .dock 写 transform 都会连带顶掉
+     translateX(-50%)（fx.js 因此只能退而动画内层 .dock-panel）；新写法 .dock 自身不带
+     transform，内外两层都可安全做动效。
+     注意 max-width 必须一并下移到 .dock-panel：left/right 同时为 0 时再给 max-width 会让
+     约束过载，浏览器丢掉的正是 right，整条导航会被挤到左边。 */
 }
 .dock-panel {
   pointer-events: auto;
@@ -262,6 +324,7 @@ section[id] { scroll-margin-top: 76px; }
   gap: 4px;
   height: 48px;              /* panelHeight（68 → 48：面积收小） */
   padding: 0 8px;
+  max-width: calc(100vw - 24px);   /* 由 .dock 下移到面板：限制的是胶囊本身，窄屏放不下时靠下面的 overflow-x 横滚 */
   border-radius: 14px;
   background: rgba(18, 15, 23, 0.58);          /* 更半透明（0.85 → 0.58） */
   backdrop-filter: blur(12px);
@@ -324,8 +387,11 @@ section[id] { scroll-margin-top: 76px; }
   border-bottom: 1px solid rgba(255, 255, 255, .12);
 }
 
-/* 电影级 Hero：全屏视频背景 */
-.hero--cinema { background: var(--bg); }
+/* 电影级 Hero：全屏视频背景。
+   底色读 Hero 档主题色而不是 --bg：Hero 段是 sticky 且铺满首屏，它自铺的底色会盖住 body 的
+   --section-bg。若这里继续用 --bg(#0b0a09)，Hero 段就永远停在旧墨色，还会在它与档案段的
+   交界处留下一条色缝（body 已经是 --tone-ink 了）。 */
+.hero--cinema { background: var(--tone-ink); }
 
 /* 视频上的遮罩层（视频之上、内容之下）：暗色整体压暗 + 上下晕影 */
 .hero-mask {
@@ -371,12 +437,20 @@ section[id] { scroll-margin-top: 76px; }
 .ink-1 {
   width: 520px; height: 520px;
   left: -120px; top: 60px;
-  background: radial-gradient(circle, rgba(255, 255, 255, .13), transparent 70%);
+  /* P1（2026-09-22）：改走 CSS 变量，供 fx.js 的 initColorBreath 补间做「色彩呼吸」。
+     变量在这里【显式声明】而不是只留 var() 兜底 —— GSAP 补间自定义属性时要读起始色，
+     未声明的变量取到的是空串，读不到颜色就只能瞬间跳到终态（无补间）。
+     起始值与改前逐字相同 → JS 未启动 / reduced-motion 时渲染与改动前完全一致。 */
+  --ink-1-c: rgba(255, 255, 255, .13);
+  background: radial-gradient(circle, var(--ink-1-c), transparent 70%);
 }
 .ink-2 {
   width: 620px; height: 620px;
   right: -140px; bottom: -80px;
-  background: radial-gradient(circle, rgba(255, 255, 255, .09), transparent 70%);
+  /* P1：同上，第二团墨迹独立变量（两团补间时长不同 → 自然错相位）。
+     同样必须显式声明起始色，理由见 .ink-1 */
+  --ink-2-c: rgba(255, 255, 255, .09);
+  background: radial-gradient(circle, var(--ink-2-c), transparent 70%);
   animation-delay: -8s;
 }
 
@@ -1047,19 +1121,84 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   position: relative;
 }
 
-/* 相邻版块交替底色，制造节奏 */
-.mode-section:nth-of-type(even) { background: var(--bg-2); }
+/* ② 版块反差：原来是 `:nth-of-type(even) { background: var(--bg-2) }` 的二分交替
+   （实测相邻版块亮度差仅 1.14:1）。2026-10-01 起按【版块】分配一种色相（色值见 :root 的 --tone-*）：
+   Hero 深墨 → 档案 暖棕 → 天选 深紫 → 征神 深靛蓝 → 无间 暗酒红 → 收尾 冷灰。
+   Hero 也在这里显式登记 --sec-bg（改前它没有，靠 :root 默认值兜底）—— 六个段此后走同一条路径，
+   sectionBg.js 的 colorOf() 对每一段都能读到真实色值，不再有「读到空串 → 回退」的特例。
+   同时把该段内的卡面抬到 --card-surface（对比度 1.04 → ≈1.7）。
+   2026-10-02：--seg-tint 从 .05/.06 提到 .07/.08（配合 .seg-aura 的 opacity），
+   征神段的氛围色由朱红 .055 改为与其余四段一致的金 —— 底色换蓝后，红氛围与蓝底互相拉扯，
+   统一为金色才和全站的金色识别一致（实测氛围层中心色对该段底色的 ΔE：5.8~7.4，改前只有 1.5~3.1）。 */
+#top       { --sec-bg: var(--tone-ink); }   /* 与 .hero--cinema 自铺底色同值，交界无色缝 */
+#profile   { --sec-bg: var(--tone-amber); --panel-sec: var(--card-surface); --seg-tint: rgba(212, 175, 88, .07); }
+#tianxuan  { --sec-bg: var(--tone-violet); --panel-sec: var(--card-surface); --seg-tint: rgba(212, 175, 88, .08); }
+#zhengshen { --sec-bg: var(--tone-navy); --panel-sec: var(--card-surface); --seg-tint: rgba(212, 175, 88, .08); }
+#wujian    { --sec-bg: var(--tone-wine); --panel-sec: var(--card-surface); --seg-tint: rgba(212, 175, 88, .07); }
+#contact   { --sec-bg: var(--tone-slate); --panel-sec: var(--card-surface); --seg-tint: rgba(212, 175, 88, .08); }
 
 .mode-head { margin-bottom: 72px; }
+
+/* ---------- ③ 滚动驱动：版块氛围层 + 标题微视差 ----------
+   实测改前 #profile 及以下 4 个版块的「滚动驱动元素数」为 0（全站唯一 scrub 是顶部进度条）。
+   .seg-aura 由 segments.js 注入到每个版块，随该段的滚动进度（GSAP scrub）位移 + 提亮；
+   .mode-head / .closing-head 同时做 ±13px 微视差 —— 滚过这段时画面自己在走，
+   而不是「到点播一次就静止」。两者都只写 transform / opacity（合成层属性）。 */
+.seg-aura {
+  position: absolute;
+  left: -6%; right: -6%; top: -6%;
+  height: 112%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(58% 44% at 50% 34%, var(--seg-tint), transparent 72%);
+  opacity: .8;   /* 2026-10-02：原 .42 叠上 .05 的 tint 后中心色对该段底色只有 ΔE 1.5~3.1（看不出来）；
+                    提到 .8 后 5.8~7.4 —— 「滚过这段时画面自己在走」才成立。 */
+  will-change: transform, opacity;
+}
+/* 内容层抬到氛围层之上（.container 原本是 static，会被绝对定位的氛围层盖住） */
+.mode-section > .container,
+.closing > .container { position: relative; z-index: 1; }
+
+/* ---------- 网格扫描线（choreo 注入，一次性） ----------
+   卡片落位期间一道金色光束扫过整片数据网格（借 React Bits 的揭示语汇）。
+   元素与网格同尺寸，靠 translateX 平移；渐变两端透明 → 不用给网格加 overflow:hidden，
+   也就不会把卡片的 hover 阴影 / 光晕裁掉。 */
+.stat-grid { position: relative; }
+.grid-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(212, 175, 88, 0) 38%,
+    rgba(240, 208, 138, .5) 50%,
+    rgba(212, 175, 88, 0) 62%,
+    transparent 100%);
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) { .grid-scan { display: none; } }
+
+/* ③ 版块标题块微视差：与 .seg-aura 同一个 scrub 驱动（segments.js 直接写 y，此处不预设 transform，
+   避免与 GSAP 内联值互相覆盖）。这一层不被 choreo/fx 触碰（它们只动 .mode-head 的子元素）。 */
+
+/* ② 卡面被抬亮后，卡内的次要文字同步提亮；--muted 只在卡片容器内被改写，
+   版块里其余文字（标题、简介、页脚）保持原值不变。 */
+.stat-card, .zs-progress-card, .hero-card, .weapon-card, .build-card, .treasure-item { --muted: var(--muted-card); }
 
 .mode-head-top { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 
 .mode-no {
   font-family: var(--font-title);
   font-size: 15px;
-  color: var(--verm-2);
+  /* 版块编号是正文级文字（15px/400），要 4.5:1。--verm-2 #e05a48 在六段底色上的上限
+     只有 4.77（得把底色压到近乎全黑才够），2026-10 征神之路换成深靛蓝后实测掉到 4.44
+     ⇒ 与 .build-card-flow / 藏品卡同一手法：向白抬 6% 取 #e26453，六段实测 4.80~5.59，
+     仍是明显的朱红。不动 --verm-2 本身（它在卡面大字上够用）。 */
+  color: color-mix(in srgb, var(--verm-2) 94%, #fff);
   letter-spacing: .3em;
-  border: 1px solid rgba(224, 90, 72, .4);
+  /* 原来是硬编码的 rgba(224,90,72,.4)，正是 --verm-2 的 40% —— 改为跟随令牌，渲染一致 */
+  border: 1px solid color-mix(in srgb, var(--verm-2) 40%, transparent);
   padding: 3px 12px;
   border-radius: 3px;
 }
@@ -1109,7 +1248,9 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 
 .stat-card {
   position: relative;
-  background: linear-gradient(180deg, var(--panel), #141210);
+  /* ② 卡面底：版块内读 --panel-sec（= --card-surface），版块外回退 var(--panel)。
+     渐变第二档由 color-mix 从同色派生，等价于原来的写死值（#141210），不新增硬编码色。 */
+  background: linear-gradient(180deg, var(--panel-sec), color-mix(in srgb, var(--panel-sec) 87%, #000));
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   padding: 26px 26px 22px;
@@ -1324,9 +1465,24 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 }
 .card-grid--3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
+/* ---------- 常用英雄 / 常用武器：改由 DepthCarousel 承载（2026-09-25）----------
+   卡片本体仍是 .hero-card / .weapon-card（复用，未重写）；这里只给轮播一个定高舞台，
+   几何（景深/铺展/倾斜/缩放/拖拽/惯性）全部由组件负责。
+   高度按各自卡内容给：英雄卡（头像 + 名称 + 使用率 + 皮肤子卡）比武器卡高一档。 */
+.loadout-carousel {
+  position: relative;
+  height: 300px;   /* 卡高 224 + 上下留白 */
+  margin-top: 6px;
+}
+.loadout-carousel--weapon { height: 272px; }
+@media (max-width: 900px) {
+  .loadout-carousel { height: 340px; }
+  .loadout-carousel--weapon { height: 300px; }
+}
+
 .hero-card,
 .weapon-card {
-  background: linear-gradient(180deg, var(--panel), #131110);
+  background: linear-gradient(180deg, var(--panel-sec), color-mix(in srgb, var(--panel-sec) 85%, #000));
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   padding: 22px;
@@ -1507,7 +1663,7 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 }
 
 .zs-progress-card {
-  background: var(--panel);
+  background: var(--panel-sec);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   padding: 30px;
@@ -1530,7 +1686,11 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   font-weight: 800;
   color: var(--gold-2);
   line-height: 1;
-  text-shadow: 0 0 30px rgba(212, 175, 88, .3);
+  /* P1（2026-09-22）：金色辉光改走变量，供 initColorBreath 做暖金色调呼吸。
+     起始值与改前逐字相同；该元素是单个数码大字，重绘面积小（≈84px 字 + 30px 辉光）。
+     显式声明起始色：GSAP 补间自定义属性需要读到起始颜色才能插值 */
+  --zs-glow: rgba(212, 175, 88, .3);
+  text-shadow: 0 0 30px var(--zs-glow);
 }
 
 .zs-shidian-head {
@@ -1575,7 +1735,10 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   max-height: calc(var(--zs-row-h) * var(--zs-rows));
   overflow-y: auto;
   overscroll-behavior: contain;   /* 滚到底不把整页（Lenis）一起带着滚 */
-  background: var(--bg);          /* 近黑底：比面板 --panel 再暗一层，与大留白拉开层次 */
+  /* 底色改读卡片底色 --panel（原来是更暗的 --bg）：接入 AnimatedList 后，上下渐隐遮罩
+     必须与列表同色才能是「内容从卡片边缘淡出」，否则会在顶/底压出两块色块。
+     AnimatedList.css 里的滚动条轨道与 .top/.bottom-gradient 用的是同一个变量。 */
+  background: var(--panel);
   border-top: 1px solid var(--line-soft);
   border-bottom: 1px solid var(--line-soft);
   list-style: none;
@@ -1587,7 +1750,7 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
    刻意不写 scrollbar-width：Chrome 121+ 一旦设置它会忽略下面的 ::-webkit-scrollbar，
    3px 细金条就没了。 */
 .zs-shidian-list::-webkit-scrollbar { width: 3px; }
-.zs-shidian-list::-webkit-scrollbar-track { background: transparent; }
+.zs-shidian-list::-webkit-scrollbar-track { background: var(--panel); }   /* 轨道 = 卡片底色 */
 .zs-shidian-list::-webkit-scrollbar-thumb {
   background: var(--gold);                                       /* 不支持 color-mix 时：实心金 */
   background: color-mix(in srgb, var(--gold) 36%, transparent);  /* 支持时：半透明金 */
@@ -1609,7 +1772,12 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   font-size: 14.5px;
   letter-spacing: .04em;
 }
-.zs-shidian-row:last-child { border-bottom: 0; }
+/* 最后一行不画分割线（容器自己已有 border-bottom，否则会叠成双线）。
+   ⚠ 接入 AnimatedList 后，每行外面多了一层带 data-index 的包装元素，
+   .zs-shidian-row 不再是容器的直接子元素 —— `:last-child` 会命中**每一行**
+   （每行都是自己包装元素的唯一子元素），全表分割线会一起消失。
+   所以改成按包装元素判「最后一行」。 */
+.zs-shidian-list > [data-index]:last-child .zs-shidian-row { border-bottom: 0; }
 
 /* 极小菱形点（规格允许用金的第三处）：低透明度，是刻度不是强调 */
 .zs-shidian-row::before {
@@ -1620,6 +1788,13 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   background: var(--gold);
   opacity: .45;
   transform: rotate(45deg);
+}
+
+/* hover / 组件的 selected 高亮：一律用站内语言（金色淡底微提亮），
+   不用组件默认的灰底 #2F293A。AnimatedList 在 mouseenter 时把 selected 传进来，
+   由 renderItem 落到 .is-hover；鼠标移出整块列表即复位。 */
+.zs-shidian-row.is-hover {
+  background: rgba(212, 175, 88, .07);
 }
 
 .zs-shidian-name { color: var(--text); }
@@ -1648,7 +1823,7 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 
 /* 魂玉搭配卡片 */
 .build-card {
-  background: linear-gradient(180deg, var(--panel), #131110);
+  background: linear-gradient(180deg, var(--panel-sec), color-mix(in srgb, var(--panel-sec) 85%, #000));
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   padding: 24px;
@@ -1690,7 +1865,10 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 }
 
 .build-card-name { font-family: var(--font-title); font-size: 18px; color: var(--text); }
-.build-card-flow { font-size: 13px; color: var(--verm-2); letter-spacing: .16em; }
+/* 流派名（13px 正文）：--verm-2 #e05a48 直接压在卡面 --card-surface #3e3932 上只有 3.12:1，
+   低于正文所需的 4.5:1。2026-10-02 改为同色相向白抬亮 60% → #ec9c91 = 5.29:1。
+   只动这一个「卡面 + 小字」的组合：--verm-2 在全站其他位置（大字号 / 更深底）不变。 */
+.build-card-flow { font-size: 13px; color: color-mix(in srgb, var(--verm-2) 60%, #fff); letter-spacing: .16em; }
 
 .jade-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 
@@ -1723,7 +1901,9 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   pointer-events: none;
 }
 .build-card--clickable:hover .build-card-hint,
-.build-card--clickable:focus-visible .build-card-hint { opacity: .5; }
+.build-card--clickable:focus-visible .build-card-hint { opacity: .75; }
+/* 上面这条原为 opacity .5：#f0d08a 压在半透明上实际只有 3.2:1，而 11px 属正文级、需 4.5:1。
+   抬到 .75 后 = 5.0:1（卡片渐变最亮端 4.9:1），观感仍是"轻轻浮出来"的提示，不抢标题。 */
 
 /* ---------- 无间镖客 · 三境合计 ---------- */
 /* 只有"三境汇总"口径的字段单独成块：替代"把同一个汇总数字抄进三个境"的假分境数据。
@@ -1749,7 +1929,7 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 14px;
-  background: var(--panel);
+  background: var(--panel-sec);
   border: 1px solid;
   border-radius: var(--radius);
   padding: 16px;
@@ -1791,17 +1971,18 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 .treasure-rarity { font-size: 12px; letter-spacing: .2em; margin: 2px 0; }
 .treasure-note { font-size: 12.5px; color: var(--muted); }
 
-/* 藏品卡文字全红（本轮明确指令，覆盖「标签走品质色」的旧策略）：
+/* 藏品卡文字全红（当时的明确指令，覆盖「标签走品质色」的旧策略）：
    名称 / 品质标签 / 副标题统一读同一个 --hero-theme（= 沈妙 themeColor），
    改数据一处即三处同步；不写死第二份红。
-   副标题用低透明度弱化层级，不与名称抢视觉（.treasure-note 的 hover 浮层规则见下方「藏品描述浮层」段，
-   特异性更高，hover 时仍会提到不透明）。 */
+   2026-10-02 对比度修复：--hero-theme 直接落在卡面 #3e3932 上只有 2.92:1（副标题再叠 .55 透明度后仅 1.75:1），
+   名称/品质/副标题一律按同色相向白抬亮 60% → #ef9194 = 4.98:1；红色语义与「一处数据三处同步」都保留。
+   层级改由字号承担（17 / 12 / 12.5px），不再用透明度压——12.5px 的小字本来就比 17px 弱。 */
 .treasure-item .treasure-name,
-.treasure-item .treasure-rarity { color: var(--hero-theme, var(--gold-2)); }
+.treasure-item .treasure-rarity { color: color-mix(in srgb, var(--hero-theme, var(--gold-2)) 60%, #fff); }
 .treasure-item .treasure-note {
-  color: var(--hero-theme, var(--gold-2));
-  opacity: .55;
-  transform: none;   /* 与低透明度同批处理：常驻弱显示，不再靠 translateY 浮层 */
+  color: color-mix(in srgb, var(--hero-theme, var(--gold-2)) 60%, #fff);
+  opacity: 1;
+  transform: none;   /* 常驻显示，不参与下方「藏品描述浮层」段的 translateY(8px) 收放 */
 }
 
 /* ---------- 收尾页 ---------- */
@@ -1811,7 +1992,9 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   display: grid;
   place-items: center;
   overflow: hidden;   /* 注：Dock 已移至顶部，底部无需再预留 96px */
-  background: linear-gradient(180deg, var(--bg) 0%, #0e0c09 100%);
+  /* 底色同样交给 body 的 --section-bg。原来那段 color-mix(…, #fff) 的「由暗到亮」改写成
+     等价的半透明白渐变（8% 白 ≈ 原式），叠在动画底色上，观感与改前一致但不再盖住过渡。 */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .08) 100%);
 }
 
 .closing-bg { position: absolute; inset: 0; z-index: 0; }
@@ -1838,13 +2021,6 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   padding: 140px 0 60px;
 }
 
-.closing-kicker {
-  font-size: 14px;
-  letter-spacing: .5em;
-  color: var(--gold);
-  margin-bottom: 30px;
-}
-
 .closing-title {
   font-family: var(--font-title);
   font-size: clamp(44px, 6vw, 84px);
@@ -1852,6 +2028,13 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   letter-spacing: .12em;
   color: var(--text);
   margin-bottom: 20px;
+  /* 2026-10-02：逐字升起动画（animations.js revealText）把每个字先压到 yPercent:110 ——
+     本页字号 82.7px、行高 140.6px，110% 就是 148px，正好跨到下方 20px 处的副标题行上，
+     于是入场途中会看到半透明的字压在副标题文字上（已实测复现）。
+     动画本该由 masks 容器 overflow:hidden 裁掉，但 revealText 里那个 container 从未挂进 DOM
+     （chars 被 append 到 fragment、container 只被 void 占位），所以这里补上最外层裁剪。
+     动画字形比行盒小得多，归位后不会被裁到。 */
+  overflow: hidden;
 }
 
 .closing-subtitle {
@@ -1862,25 +2045,6 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 }
 
 .closing-contact { display: flex; flex-direction: column; align-items: center; gap: 34px; }
-
-.closing-links { display: flex; align-items: center; gap: 22px; }
-
-.closing-link {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 24px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  transition: all .3s var(--ease);
-  cursor: pointer;
-}
-.closing-link:hover { border-color: var(--gold); background: rgba(212,175,88,.05); transform: translateY(-3px); }
-
-.closing-link-label { font-size: 12px; color: var(--muted); letter-spacing: .3em; }
-.closing-link-value { font-size: 16px; color: var(--gold-2); letter-spacing: .06em; }
-
-.closing-sep { width: 30px; height: 1px; background: linear-gradient(90deg, var(--gold), transparent); }
 
 .closing-foot {
   margin-top: 110px;
@@ -1989,20 +2153,53 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   0%, 100% { opacity: .12; }  /* 弱态：12px 光晕（静态阴影呈现弱光） */
   50%      { opacity: .4; }   /* 强态：30px 光晕（静态阴影呈现强光） */
 }
-/* 视口外暂停（修复三：IO 加 .is-out，恢复播放走合成器，零额外成本） */
+/* 视口外暂停（修复三：IO 加 .is-out，恢复播放走合成器，零额外成本）
+   注：animation-play-state 不继承到伪元素，::before/::after 必须逐个列出 */
 .rarity-breathe.is-out,
-.rarity-breathe.is-out::after { animation-play-state: paused; }
+.rarity-breathe.is-out::after,
+.rarity-breathe.is-out::before { animation-play-state: paused; }
 /* 普通品质：低调灰描边，无呼吸 */
 .rarity-breathe--common {
   border: 1.5px solid rgba(127, 139, 147, 0.28);
   animation: none;
 }
 .rarity-breathe--common::after { display: none; }
+.rarity-breathe--common::before { display: none; }
 
-/* 减弱动态：停呼吸，保留静态描边 */
+/* ── P2 · 光环外扩（2026-09-22 新增）────────────────────────
+   参考 phantom 的 fb4euy0（0 → 0 0 0 6px 扩散，2s ease-out infinite）。
+   ⚠ 只借它的【节奏】，不借它的【写法】：原站每帧动 box-shadow 本体 → 每帧重新
+   光栅化阴影（主线程重绘）。本项目已确立铁律「静态 box-shadow + 只动 opacity/transform」
+   （见上方 rarity-breathe::after 的注释），所以这里改成：
+   静态 1.5px 描边环，动画只动 transform: scale() 与 opacity —— 两者都走合成器，零重绘。
+   环层用 ::before（::after 已被光晕占用），z-index 再低一层垫在光晕之下。
+   is-out / hover / reduced-motion 三处暂停与关闭必须同步覆盖 ::before，
+   否则会出现「其它都停了、只剩光环在动」的漏网。 */
+.rarity-breathe::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid rgba(var(--rarity-rgb, 212, 175, 55), 0.5);
+  opacity: 0;                 /* 静止态不可见：reduced-motion / 未启动时无残留 */
+  transform-origin: center;
+  transform: scale(1);
+  animation: rarityRing 2s ease-out infinite;
+  animation-delay: 0s;        /* 与呼吸同约定：同品质严禁 stagger */
+  pointer-events: none;
+  z-index: -2;
+}
+@keyframes rarityRing {
+  0%   { transform: scale(1);    opacity: .55; }
+  70%  { transform: scale(1.06); opacity: 0; }
+  100% { transform: scale(1.06); opacity: 0; }
+}
+
+/* 减弱动态：停呼吸，保留静态描边（环層整体移除，静止态无残留） */
 @media (prefers-reduced-motion: reduce) {
   .rarity-breathe, .rarity-breathe::after { animation: none; }
   .rarity-breathe::after { opacity: .2; }
+  .rarity-breathe::before { display: none; }
 }
 
 /* 6. 藏品描述浮层：默认收起，hover 上移显现 */
@@ -2097,6 +2294,7 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   transform-style: preserve-3d;
   transition: border-color .35s ease, box-shadow .35s ease;
   will-change: transform;
+  cursor: pointer;   /* P0 翻面后卡片本身可点：给出指针提示（点击处理在 article 上） */
 }
 .hero-card:hover, .weapon-card:hover {
   transform: none; /* 旧上浮取消：位移由 fx 的 tilt 接管 */
@@ -2191,9 +2389,13 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 .weapon-card.is-tap-fill .usage-bar-fill { transform: scaleX(1); transition: transform .5s cubic-bezier(0.22, 1, 0.36, 1); }
 .usage-bar-num { transition: opacity .3s ease; }
 
-/* 第五层时序：hover 暂停皮肤静态呼吸（光晕/描边由卡片 hover 接管），移出恢复 */
+/* 第五层时序：hover 暂停皮肤静态呼吸与 P2 外扩环（光晕/描边由卡片 hover 接管），移出恢复。
+   注：::before（外扩环）的 opacity 由 animation 独占，**不要**把它并进下面那条
+   「:hover ::after { opacity: 1 }」——CSS transition 与 animation 同时写 opacity 会互相打架 */
 .hero-card:hover .rarity-breathe,
-.weapon-card:hover .rarity-breathe { animation-play-state: paused; }
+.weapon-card:hover .rarity-breathe,
+.hero-card:hover .rarity-breathe::before,
+.weapon-card:hover .rarity-breathe::before { animation-play-state: paused; }
 
 /* 第一层（续）：hover 时皮肤词条描边同步增亮 0.5→0.95，光晕层 opacity 提到 1
    （hover 一次性过渡，非循环动画，无持续重绘） */
@@ -2245,6 +2447,127 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
   .card-sheen { display: none; }
   .usage-bar-track { opacity: 1; }
   .usage-bar-fill { transform: none; transition: none; }   /* 直显终态：scaleX(0) 归位为满格 */
+}
+
+/* ════════════════════════════════════════════════════════════
+   P0 · 卡片翻面（2026-09-22 新增）
+   正面内容原样；点击卡片 → 内层绕 Y 轴翻转，背面显示「各模式使用率」。
+   四条不可动的约束：
+   ① 旋转落在 .card-3d、**不落在卡片上**：卡片的 transform 已被 fx.js 的
+      gsap.quickTo(card,'rotationX'/'rotationY') 占用（fx.js:561-562），
+      在卡片上写 rotateY 会与 tilt 抢同一个 transform（CSS transition 与
+      GSAP 逐帧写值互相覆盖，表现为 tilt 卡死或翻面不生效）。
+   ② .card-3d / .card-face 必须 preserve-3d —— 卡内 translateZ
+      (44/26/18/12px，见上方 2120-2126 行) 靠这条链往下传；断链后果与
+      「overflow:hidden 压平」同源（那边实测头像 62.6→59.9px）。
+   ③ 背面 absolute + rotateY(180deg) + backface-visibility:hidden，
+      不参与布局 → 静止时卡片尺寸/排版/剑光/tilt 与改动前逐像素一致。
+   ④ 透视仍由 .card-grid 的 perspective:1000px 提供；**不要**在卡片或
+      .card-3d 上再加 perspective —— 会改变 translateZ 的成像大小
+      （见上方 2130-2135 行的实测记录）。
+   ════════════════════════════════════════════════════════════ */
+.card-3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .55s cubic-bezier(.22, 1, .36, 1);
+}
+.hero-card.is-flipped .card-3d,
+.weapon-card.is-flipped .card-3d { transform: rotateY(180deg); }
+
+.card-face { transform-style: preserve-3d; }
+/* 正面也要 hidden：否则翻过 90° 后会在背面下方透出镜像的正面内容 */
+.card-face--front {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-face--back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 4px 2px;
+  border-radius: 12px;
+  /* 面板语言与 .skin-item 同源：主题色淡底 + 主题色描边，读同一个 --hero-theme-rgb */
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(var(--hero-theme-rgb, 212, 175, 88), .14), transparent 68%),
+    rgba(var(--hero-theme-rgb, 212, 175, 88), .05);
+  box-shadow: inset 0 0 0 1px rgba(var(--hero-theme-rgb, 212, 175, 88), .35);
+}
+
+.card-back-title {
+  font-family: var(--font-title);
+  font-size: 13px;
+  letter-spacing: .18em;
+  color: rgba(var(--hero-theme-rgb, 212, 175, 88), .9);
+  padding-left: 10px;
+}
+.card-back-rows { display: flex; flex-direction: column; gap: 10px; padding: 0 10px; }
+.card-back-row { display: flex; align-items: center; gap: 10px; }
+.card-back-mode { flex: 0 0 auto; width: 34px; font-size: 12px; color: var(--muted); }
+.card-back-track {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .07);
+  overflow: hidden;
+}
+/* 填充条：宽度静态取自 --usage-w（百分比），只过渡 transform —— 与 .usage-bar-fill
+   同一手法，不产生 impeccable [layout-transition] 告警 */
+.card-back-track > i {
+  display: block;
+  height: 100%;
+  width: var(--usage-w, 100%);
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    rgba(var(--hero-theme-rgb, 212, 175, 88), .35),
+    rgba(var(--hero-theme-rgb, 212, 175, 88), .95));
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform .5s cubic-bezier(.22, 1, .36, 1) .12s;
+}
+.hero-card.is-flipped .card-back-track > i,
+.weapon-card.is-flipped .card-back-track > i { transform: scaleX(1); }
+
+/* 翻面开关：铺满卡片的透明 <button>（放在 .card-3d 之外 → 自身不旋转，
+   翻过去之后仍然点得到，能翻回来）。
+   z-index 6 高于 .tilt-glow 的 5；两者本来都 pointer-events:none / 可点，
+   这里只保证视觉层序不乱。 */
+.card-flip-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  /* 只服务键盘：鼠标/触摸的点击由 card 的 onClick 处理。
+     实测证据：铺满卡片的按钮收不到鼠标点击 —— .hero-card 是 preserve-3d 场景，
+     命中测试按深度排序，卡内 translateZ(44/26/18/12px) 的内容永远排在 z=0 的浮层之前；
+     elementsFromPoint 显示按钮在最上层，但真实点击的 target 是 article（探针日志 CARD@ 命中，TOG@ 未命中）。
+     置 none 后指针事件直达卡内内容并冒泡到 article；键盘 Tab 仍可聚焦、Enter/Space 仍派发 click 到本按钮。 */
+  pointer-events: none;
+}
+.card-flip-toggle:focus-visible {
+  outline: 2px solid rgba(var(--hero-theme-rgb, 212, 175, 88), .9);
+  outline-offset: -3px;
+}
+
+/* reduced-motion：翻面改为瞬时切换（功能保留，去掉旋转动画与填充条延迟） */
+@media (prefers-reduced-motion: reduce) {
+  .card-3d { transition: none; }
+  .card-back-track > i { transition: none; }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -2396,7 +2719,23 @@ html.detail-lock, html.detail-lock body { overflow: hidden; }
 .site.cover-on .cover-pair > #profile {
   position: relative;
   z-index: 2;
-  background: var(--bg-2);   /* 必须完全不透明：被钉住的 Hero 不得从档案透出 */
+  /* 2026-10-01：底色改读【实时】的 --section-bg（不再是本段自己的常量 --sec-bg），并补上同一个 700ms 过渡。
+     两个理由：
+     ① 档案段高 1178px（≈1.45 屏），是 cover 叠层里唯一不透明的段。用常量色 = 整屏盖了一块永远不动的
+        死色：hero→档案 的 700ms 过渡整段发生在它背后，肉眼完全看不到 —— 这是「看不出效果」的主因之一；
+     ② 档案本身就是「当前过半的板块」时，--section-bg 恰好等于它自己那档，静止观感与改前逐值一致。
+     不透明这一条必须保留（被钉住的 Hero 不得从档案透出），所以这里不走「半透明」方案，
+     而是让这块不透明面跟着同一个变量一起渐变 —— 观感上等价于透明，但不放行被钉住的 Hero。 */
+  background: var(--section-bg);
+  transition: background-color 700ms ease;   /* 与 body 同拍：两处渐变严格同步，交界处看不到缝 */
+}
+
+/* 上面那条 transition 必须在这里【原地】被关掉，不能写在文件前面的 bootstrap / reduced-motion 块里：
+   同权重选择器时后来者居上，写在前面等于没写。这是 2026-10-01 实测踩到的坑 ——
+   减弱动效下 body 已是瞬切（0s），档案段却仍在 700ms 里独自渐变，叠层上会露出一块浅色的脸。 */
+html.sec-bg-boot .site.cover-on .cover-pair > #profile { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .site.cover-on .cover-pair > #profile { transition: none; }
 }
 /* 实验模式 B（可选）：每个区块各自钉在视口底部，下一块继续盖 */
 .site.cover-on[data-cover="all"] main > section:not(.hero) {

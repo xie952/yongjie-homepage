@@ -1,6 +1,6 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { revealCard } from './animations'
+import { revealCardGroup } from './animations'
 import { replayChoreoSection } from './choreo'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -51,28 +51,10 @@ function replaySectionReveals(section) {
       },
     })
   })
-  // 2. 未入场的卡片重新做中心展开（去 bound 标记后可重绑定）
-  section.querySelectorAll('[data-reveal-group]').forEach((group) => {
-    const cards = Array.from(group.children).filter(
-      (c) => c.dataset.reveal !== 'none' && !c.hasAttribute('data-reveal-group')
-    )
-    if (!cards.length) return
-    cards.forEach((card) => {
-      // 先 kill 该卡片上已有的 ScrollTrigger（防止锚点多次跳转堆积实例）
-      ScrollTrigger.getAll().forEach((st) => {
-        if (st.trigger === card) st.kill()
-      })
-      delete card.dataset.bound // 允许重播
-    })
-    const total = cards.length
-    const center = (total - 1) / 2
-    cards.forEach((card, i) => {
-      const dist = i - center
-      const delay = Math.abs(dist) * 0.12
-      const fromX = Math.abs(dist) < 0.001 ? 0 : (dist < 0 ? 1 : -1) * (60 + Math.floor(Math.abs(dist) + 0.5) * 20)
-      revealCard(card, delay, fromX)
-    })
-  })
+  // 2. 未入场的卡片重新做整组入场（replay:true = 先杀旧 ScrollTrigger/timeline 再解除绑定）
+  //    编排算法与 kill/解绑逻辑都下沉到 animations.js 的 revealCardGroup，本处只负责「要求重播」，
+  //    避免像以前那样把同一段中心扩散算法在三个文件里各抄一份
+  section.querySelectorAll('[data-reveal-group]').forEach((group) => revealCardGroup(group, { replay: true }))
 }
 
 /* ── 解析启动落点（统一启动序列第 2 步用）──

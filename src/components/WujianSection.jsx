@@ -1,6 +1,7 @@
 import ModeSection from './ModeSection'
 import TabGroup from './TabGroup'
 import StatCard from './StatCard'
+import MagicBento from './MagicBento/MagicBento'
 import { wujian, treasureTheme } from '../data/stats'
 
 /**
@@ -59,8 +60,16 @@ export default function WujianSection() {
       {wujian.totals && (
         <div className="wujian-totals">
           <h4 className="loadout-title" data-reveal="up">三境合计</h4>
-          <div className="stat-grid" data-reveal-group>
-            {TOTAL_METRICS.map((m, i) => (
+          {/* 三境合计：接入 MagicBento（与天选板块同一套改法）。
+              gridClassName="stat-grid" → 列定义沿用站内定义；renderItem 复用既有 <StatCard>；
+              data-reveal-group 保留 → 既有入场涟漪照旧生效。
+              注：本板块另一处数据卡网格是 .stat-grid stat-grid--5（分境明细，5 卡），
+              列定义与天选板块不同，本轮按边界要求**未改动**，见交接文档 §12.3。 */}
+          <MagicBento
+            items={TOTAL_METRICS}
+            gridClassName="stat-grid"
+            gridProps={{ 'data-reveal-group': true }}
+            renderItem={(m, i) => (
               <StatCard
                 key={m.key}
                 label={m.label}
@@ -69,8 +78,8 @@ export default function WujianSection() {
                 decimals={m.decimals}
                 index={i}
               />
-            ))}
-          </div>
+            )}
+          />
           <p className="wujian-totals-note" data-reveal="up">
             生境 / 险境 / 劫境 的分境明细待补，先按三境汇总展示。
           </p>
@@ -80,7 +89,8 @@ export default function WujianSection() {
       {/* 藏品展示墙：层叠错峰 */}
       <div className="treasure-block">
         <h4 className="loadout-title" data-reveal="up">藏品展示墙</h4>
-        <div className="treasure-grid" data-reveal-group>
+        {/* data-reveal-group="fan" = 由中心向两侧入场；藏品 <3 件时中间的卡不动、只淡入上浮 */}
+        <div className="treasure-grid" data-reveal-group="fan">
           {wujian.treasures.map((t) => {
             const style = TREASURE_STYLE[t.rarity] || TREASURE_STYLE.common
             return (

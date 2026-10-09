@@ -1,0 +1,73 @@
+/* AnimatedList —— React Bits 上游 AnimatedList.css 的主题化改写版。
+   接入要求 A.2：配色全部改读站内主题变量（见 src/index.css 的 :root），
+   上游自带的 #120F17 / #2F293A 已全部移除，组件内不再出现任何硬编码色值。 */
+
+/* 容器：上游写死 width:500px，改为撑满父级（段位卡片的内容宽）。
+   同时作为上下渐隐遮罩的定位上下文（position: relative 是遮罩能贴住列表边缘的前提）。 */
+.scroll-list-container {
+  position: relative;
+  width: 100%;
+}
+
+/* 滚动区：padding 归零。
+   站内的段位行自带 0 16px 内边距、分割线是全宽发丝线；上游的 16px 会把它整体 inset
+   进去，行与分割线就对不齐了。
+   这里**不设 max-height** —— 高度由调用方决定（本站用 .zs-shidian-list 的
+   --zs-row-h × --zs-rows，见 index.css），避免组件演示值与站内设计稿互相覆盖。 */
+.scroll-list {
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* 滚动条：与站内既有段位区滚动条同值（3px 半透明金，色从 --gold 推导，不新增第二套色值）。
+   刻意不写 scrollbar-width：Chrome 121+ 一设它就忽略下面的 ::-webkit-scrollbar，细金条会消失。 */
+.scroll-list::-webkit-scrollbar { width: 3px; }
+.scroll-list::-webkit-scrollbar-track { background: var(--panel); }  /* 轨道 = 站内卡片底色 */
+.scroll-list::-webkit-scrollbar-thumb {
+  background: var(--gold);                                        /* 不支持 color-mix 时：实心金 */
+  background: color-mix(in srgb, var(--gold) 36%, transparent);   /* 支持时：半透明金 */
+  border-radius: 2px;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 默认行样式：仅在调用方不传 renderItem 时才会用到。
+   按接入要求移除了上游写死的背景色，改读站内面板色。 */
+.item {
+  padding: 16px;
+  background-color: var(--panel-2);
+  border-radius: 8px;
+}
+.item.selected {
+  background-color: var(--panel-2);
+}
+.item-text {
+  color: var(--text);
+  margin: 0;
+}
+
+/* 上下渐隐遮罩：颜色 = 段位卡片的实际底色（.zs-progress-card 的 background 就是 --panel），
+   这样视觉上是「内容从卡片边缘淡出」，而不是压一块突兀的深灰紫色块。
+   高度按站内段位列表视口（--zs-row-h 52px × --zs-rows 4.4 ≈ 228.8px）取 44px，
+   约合一整行的渐变带：顶部让第 1 行自然淡出、底部让被截断的第 5 行淡出。 */
+.top-gradient,
+.bottom-gradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 44px;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.top-gradient {
+  top: 0;
+  background: linear-gradient(to bottom, var(--panel), transparent);
+}
+.bottom-gradient {
+  bottom: 0;
+  background: linear-gradient(to top, var(--panel), transparent);
+}

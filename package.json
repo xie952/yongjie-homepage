@@ -6,7 +6,8 @@
   "description": "《永劫无间》个人游戏主页 - 非官方个人展示站",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/clean-dist.mjs && vite build",
+    "check:data": "node scripts/check-data.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

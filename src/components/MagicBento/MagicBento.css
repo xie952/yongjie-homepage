@@ -1,0 +1,132 @@
+/* MagicBento —— React Bits 上游 MagicBento.css 的主题化改写版。
+   上游有 3 处会污染全站，接入前全部处理掉（逐条说明，便于回查）：
+
+   ① 上游 `:root { --white / --border-color / --background-dark / --hue / --sat … }`
+      外加 `color-scheme: light dark`：这些是通用名，且 color-scheme 会改变
+      全站滚动条与表单控件的明暗。**整块删除**，只保留组件自用的 `--glow-rgb`，
+      并且限定在 `.magic-bento-grid` 作用域内（由 JSX 写入，见 MagicBento.jsx）。
+   ② 上游 `.card-grid { gap / padding / max-width / font-size }`：站内 index.css:1321
+      已有同名类，英雄卡 / 武器卡 / 魂玉卡三处网格都在用它，上游这份会直接改掉它们。
+      **改名为 .magic-bento-grid**，并且不写任何列定义 —— 列定义 / 间距 / margin
+      由调用方传入的 `.stat-grid` 提供（沿用现有数据卡网格）。
+   ③ 上游的紫色字面量（深灰紫底、紫色描边与光晕）全部改读站内变量与 `--glow-rgb`；
+      本文件内已无任何紫色字面量，可直接用十六进制与 rgb 三元组检索复核。
+
+   另按接入要求删除：六宫格规则（`nth-child(3)` 的 2×2 跨格、`nth-child(4)`/`nth-child(6)`
+   的 grid 行列）、`aspect-ratio: 4/3`、`min-height: 200px`、上游的 20px 圆角与
+   1.25em 内边距 —— 卡面一律沿用站内 `.stat-card` 的定义，高度由内容撑开。 */
+
+/* 栅格容器：只提供「网格 + 定位上下文」两件组件必需的事。
+   列数 / 间距 / 外边距故意不在这里写 —— 由调用方通过 gridClassName 传站内 .stat-grid，
+   这样与现有数据卡完全同源，也符合「不得使用组件默认值」。 */
+.magic-bento-grid {
+  display: grid;
+  position: relative;
+}
+
+/* 单卡外壳：**透明**。
+   卡面（底色 / 边框 / 圆角 / 内边距 / 左上角切角）全部由内部既有的 .stat-card 提供，
+   这里只负责三件组件行为需要的事：裁剪（点击涟漪）、圆角（供 ::after 描边光晕 inherit）、
+   以及聚光变量。上游的深灰紫底色、20px 圆角、1.25em 内边距、4/3 比例、200px 最小高全部删除。 */
+.magic-bento-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--radius);   /* 与 .stat-card 同值，光晕描边才能贴合卡面 */
+  overflow: hidden;
+
+  --glow-x: 50%;
+  --glow-y: 50%;
+  --glow-intensity: 0;
+  --glow-radius: 200px;
+}
+
+/* 外壳是透明 flex 容器，内层卡面（站内 .stat-card）必须撑满整格，
+   否则同一行里内容少的卡会比相邻卡矮一截（grid 行高由最高的卡决定）。 */
+.magic-bento-card > .stat-card {
+  flex: 1 1 auto;
+}
+
+/* 上游的 `.magic-bento-card:hover { transform: translateY(-2px); box-shadow: … }` 已删除：
+   位移与阴影由站内 .stat-card:hover（translateY(-5px) + 金边）负责，
+   保留会产生「外壳位移 + 卡面再位移」的双重位移。 */
+
+/* —— 描边光晕：上游 3 处紫色 rgba 全部改用 --glow-rgb（主题金现算） —— */
+.magic-bento-card--border-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 6px;
+  background: radial-gradient(
+    var(--glow-radius) circle at var(--glow-x) var(--glow-y),
+    rgba(var(--glow-rgb), calc(var(--glow-intensity) * 0.8)) 0%,
+    rgba(var(--glow-rgb), calc(var(--glow-intensity) * 0.4)) 30%,
+    transparent 60%
+  );
+  border-radius: inherit;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+/* 邻近卡片泛金光：hover 时用主题金外发光替代上游的紫色外发光 */
+.magic-bento-card--border-glow:hover {
+  box-shadow: 0 0 30px rgba(var(--glow-rgb), 0.18);
+}
+
+.particle-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.magic-bento-card:hover {
+  box-shadow: none;   /* 外壳不投影，投影交给 .stat-card:hover */
+}
+
+/* 星点粒子：上游的紫色底光 → 主题金。
+   数据卡默认 enableStars=false，此样式仅供需要时启用。 */
+.particle::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: rgba(var(--glow-rgb), 0.2);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.particle-container:hover {
+  box-shadow: 0 0 30px rgba(var(--glow-rgb), 0.18);
+}
+
+/* —— 全局聚光 ——
+   z-index 从上游的 200 降到 20：站内既有层级是
+   内容/叠层 0–3 · 滚动进度条 200 · dock 300 · 弹窗 500 · preloader 2147483000，
+   200 会盖住滚动进度条同层并与 dock 抢层级；20 保证「盖在内容之上、dock/弹窗/preloader 之下」。
+   pointer-events: none 保证不拦截任何事件（dock 点击、弹窗、卡片 hover 全部照常穿透）。 */
+.global-spotlight {
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* 上游这里是 `user-select: none`，会让整个数据卡区不可选中文字，站内其它模块没这个约定，
+   故一并去掉，只保留定位上下文。 */
+.bento-section {
+  position: relative;
+}

@@ -343,7 +343,7 @@ export const effects = {
 
 // ---------- 6. 收尾页（组队招募 + 联系方式） ----------
 export const closing = {
-  title: "少侠留步，组个队？",
+  title: "行走江湖，义气为先",
   subtitle: "缺人上分？开黑缺奶？征神缺输出？我都可以来。",
   contact: {
     gameId: "榭安",               // 游戏内加好友（就是你本人的ID）

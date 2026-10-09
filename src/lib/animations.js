@@ -148,51 +148,174 @@ export function revealUp(el, { delay = 0 } = {}) {
 }
 
 /* ──────────────────────────────────────────────────────────
- * 四、卡片入场：从中心向两侧展开（fan-out）
- *   - 中心卡 delay=0 纯上浮；左侧卡从右滑入(+X)；右侧卡从左滑入(−X)
- *   - delay = |i - centerIndex| × 0.12s
- *   - fromX = 方向 × (60px + 距中心层级 × 20px)
+ * 四、卡片列表入场：由中心向两侧展开（fan-out）
+ *   —— 组件/指令级通用编排，数据驱动，不针对任何 section 硬编码
+ *
+ * 接入方式：在【卡片容器】上挂 data-reveal-group="fan"，其【直接子元素】即卡片。
+ *   条数变化自动适配（奇数/偶数/0/1/2 张都有定义），卡片增减不需要改任何代码。
+ *   本节的编排算法是唯一实现，三个触发时机共用同一份：
+ *     ① 首屏         initScrollReveals()          （本文件）
+ *     ② 锚点跳转重播  reinitSection()              （join.js）
+ *     ③ 切 Tab 新面板 replayGroupCards()           （fx.js）
+ *   此前这段算法在三个文件里各复制了一份，改一处漏两处。
+ *
+ * 几何（以列表几何中心为基准）
+ *   · 奇数张 → 中间一张 = 基准组（level 0），向两侧按层级递增
+ *   · 偶数张 → 中间两张同属基准组（同为 level 0），向两侧按层级递增
+ *   节奏：基准组 0ms，每向外一层 +60ms，封顶 300ms
+ *   位移：横向排布 → 左半区自左侧(−40px)归位、右半区自右侧(+40px)归位，叠加自下方 40px 上浮
+ *         纵向堆叠（窄屏塌成单列）→ 自动降级为「上侧自上、下侧自下」的纵向展开，横向位移归零
+ *   收尾：clearProps:'transform' —— 入场结束立刻把 transform 交还 CSS 的分层与 hover tilt
+ *
+ * 向后兼容：容器不写 ="fan" 时走下面的 legacy 分支，位移方向/幅度/节奏与改动前逐字一致
+ *   → 未接入的组（stat-grid / profile-socials / closing-head / mode-rank-row …）零波及。
  * ────────────────────────────────────────────────────────── */
-export function revealCard(el, delay = 0, fromX = 0) {
+export const FAN = {
+  step: 0.06,     // 相邻层级错峰 60ms
+  maxDelay: 0.3,  // 错峰封顶 300ms
+  dist: 40,       // 轴向位移幅度（横：左 −40 / 右 +40；纵：上 −40 / 下 +40）
+  riseY: 40,      // 横向排布时统一的「自下方上浮」位移
+  duration: 0.55, // 单卡时长；4 张卡含错峰总时长 ≈ 0.61s
+  scale: 0.95,    // 起始缩放
+  ease: [0.22, 1, 0.36, 1], // 与站内既有入场同一条曲线
+  blur: 6,        // 复合入场：起始模糊（px）；3D 卡片除外（见 is3DCard）
+}
+
+/* 英雄卡 / 武器卡是 preserve-3d 容器：filter 会建立包含块并【压平 3D 分层】
+   （卡内 translateZ 的头像 44px / 名称 26px 会在动画期间拍平，clearProps 时又弹回），
+   所以这两类卡走「位移 + 缩放」，不加 blur；其余卡片（stat / build / treasure）吃完整复合入场。 */
+export function is3DCard(el) {
+  return !!el && (el.classList.contains('hero-card') || el.classList.contains('weapon-card'))
+}
+
+/** 单卡入场。fromY/duration/scale 走 options，保持既有三参数调用点不变 */
+export function revealCard(el, delay = 0, fromX = 0, { fromY = 40, duration = 0.9, scale = 0.96, blur = FAN.blur } = {}) {
   if (!el || el.dataset.bound) return
   el.dataset.bound = '1'
-  if (reducedMotion()) { gsap.set(el, { opacity: 1, x: 0, y: 0, scale: 1, clearProps: 'transform' }); return }
+  if (reducedMotion()) { gsap.set(el, { opacity: 1, x: 0, y: 0, scale: 1, clearProps: 'transform,filter' }); return }
 
-  gsap.fromTo(
-    el,
-    { opacity: 0, x: fromX, y: 40, scale: 0.96 },
-    {
-      opacity: 1,
-      x: 0,
-      y: 0,
-      scale: 1,
-      duration: 0.9,
-      ease: [0.22, 1, 0.36, 1], // cubic-bezier(0.22,1,0.36,1)
-      delay,
-      clearProps: 'transform', // 入场结束清 inline transform，交给 CSS 的 translateZ 分层 / hover tilt
-      scrollTrigger: {
-        trigger: el,
-        start: 'top 80%', // 进入视口 20% 时播放
-        once: true,
-      },
-    }
+  // 复合入场：位移 + 缩放 + 模糊归位（借 React Bits AnimatedContent 的入场语言，
+  // 但由本站自己的 ScrollTrigger 统一驱动 —— 见 choreo.js 头部注释）
+  const flat = !is3DCard(el) && blur > 0
+  const from = { opacity: 0, x: fromX, y: fromY, scale }
+  const to = {
+    opacity: 1,
+    x: 0,
+    y: 0,
+    scale: 1,
+    duration,
+    ease: FAN.ease, // cubic-bezier(0.22,1,0.36,1)
+    delay,
+    clearProps: 'transform', // 入场结束清 inline transform，交给 CSS 的 translateZ 分层 / hover tilt
+  }
+  if (flat) { from.filter = 'blur(' + blur + 'px)'; to.filter = 'blur(0px)'; to.clearProps = 'transform,filter' }
+
+  gsap.fromTo(el, from, {
+    ...to,
+    scrollTrigger: {
+      trigger: el,
+      start: 'top 80%', // 进入视口 20% 时播放
+      once: true,
+    },
+  })
+}
+
+/** 距中心的层级：奇数张中心卡 = 0；偶数张中间两张同为 0（共为基准组） */
+export function fanLevel(i, total) {
+  return Math.max(0, Math.ceil(Math.abs(i - (total - 1) / 2) - 0.5))
+}
+
+/** 单卡编排 → { delay, x, y }。stacked=true 表示容器已纵向堆叠 */
+export function fanSlot(i, total, stacked = false) {
+  const dist = i - (total - 1) / 2
+  const level = fanLevel(i, total)
+  const delay = Math.min(level * FAN.step, FAN.maxDelay)
+  if (level === 0) return { delay, x: 0, y: FAN.riseY }               // 基准组：只淡入 + 上浮
+  if (stacked) return { delay, x: 0, y: dist < 0 ? -FAN.dist : FAN.dist }
+  return { delay, x: dist < 0 ? -FAN.dist : FAN.dist, y: FAN.riseY }
+}
+
+/** 容器是否已纵向堆叠：看第 2 个直接子元素是否换行到下一排（用几何判定，不依赖任何断点常量） */
+export function isStackedGroup(group) {
+  const kids = Array.from(group.children)
+  if (kids.length < 2) return false
+  const a = kids[0].getBoundingClientRect()
+  const b = kids[1].getBoundingClientRect()
+  return b.top - a.top > a.height * 0.5
+}
+
+/** 组的直接子卡片（跳过嵌套组，交给内层自己管理，避免双重动画） */
+export function groupCards(group) {
+  return Array.from(group.children).filter(
+    (c) => c.dataset.reveal !== 'none' && !c.hasAttribute('data-reveal-group')
   )
 }
 
-/** 中心扩散延迟算法：delay = |i - (n-1)/2| × 0.12s */
-function fanDelay(i, total) {
-  const center = (total - 1) / 2
-  return Math.abs(i - center) * 0.12
-}
+/**
+ * 统一入口：给一个卡片容器做整组入场编排。
+ * fan 模式以【容器】为触发单位（整组同起同落）——逐卡触发会被视口边缘把错峰切碎，
+ * 纵向堆叠时更明显（下面几张还没进视口就开始计时）。
+ * @param group  卡片容器
+ * @param replay true = 重播（锚点跳转）：先杀掉旧的 ScrollTrigger / timeline 并解除绑定
+ * @returns 参与编排的卡片数
+ */
+export function revealCardGroup(group, { replay = false } = {}) {
+  if (!group) return 0
+  const cards = groupCards(group)
+  if (!cards.length) return 0
+  const total = cards.length
 
-/** 中心扩散横向位移：direction × (60 + level × 20) */
-function fanFromX(i, total) {
-  const center = (total - 1) / 2
-  const dist = i - center
-  if (Math.abs(dist) < 0.001) return 0        // 正中心：纯上浮
-  const direction = dist < 0 ? 1 : -1          // 左侧(+X 从右滑入) / 右侧(−X 从左滑入)
-  const level = Math.floor(Math.abs(dist) + 0.5) // 距中心层级（偶数卡中间两卡为 0 级）
-  return direction * (60 + level * 20)
+  if (replay) {
+    ScrollTrigger.getAll().forEach((st) => {
+      if (st.trigger === group || cards.indexOf(st.trigger) !== -1) st.kill()
+    })
+    if (group._fanTl) { group._fanTl.kill(); group._fanTl = null }
+    cards.forEach((card) => { delete card.dataset.bound })
+    delete group.dataset.fanBound
+  }
+
+  // —— 向后兼容：未标 ="fan" 的组走 legacy（与改动前逐字一致） ——
+  if (group.dataset.revealGroup !== 'fan') {
+    const center = (total - 1) / 2
+    cards.forEach((card, i) => {
+      const dist = i - center
+      const delay = Math.abs(dist) * 0.12
+      const fromX = Math.abs(dist) < 0.001 ? 0 : (dist < 0 ? 1 : -1) * (60 + Math.floor(Math.abs(dist) + 0.5) * 20)
+      revealCard(card, delay, fromX)
+    })
+    return total
+  }
+
+  // —— fan 模式：整组一次编排 ——
+  if (group.dataset.fanBound) return total // 单例：重复扫描不叠加
+  group.dataset.fanBound = '1'
+  cards.forEach((card) => { card.dataset.bound = '1' }) // 与旧入口互斥，防双绑
+
+  if (reducedMotion()) {
+    cards.forEach((card) => gsap.set(card, { opacity: 1, x: 0, y: 0, scale: 1, clearProps: 'transform' }))
+    return total
+  }
+
+  const stacked = isStackedGroup(group)
+  const tl = gsap.timeline({ paused: true })
+  cards.forEach((card, i) => {
+    const { delay, x, y } = fanSlot(i, total, stacked)
+    // 与 revealCard 同一套复合语言：非 3D 卡额外吃一段模糊归位（3D 卡跳过，避免压平 preserve-3d）
+    const flat = !is3DCard(card)
+    const from = { opacity: 0, x, y, scale: FAN.scale }
+    const to = { opacity: 1, x: 0, y: 0, scale: 1, duration: FAN.duration, ease: FAN.ease, clearProps: 'transform' }
+    if (flat) { from.filter = 'blur(' + FAN.blur + 'px)'; to.filter = 'blur(0px)'; to.clearProps = 'transform,filter' }
+    tl.fromTo(card, from, to, delay) // 位置参数 = 时间轴上的绝对时刻，即错峰
+  })
+  group._fanTl = tl
+
+  ScrollTrigger.create({
+    trigger: group,      // 以容器为单位触发（不是逐卡）
+    start: 'top 80%',
+    once: true,          // 进过就不再重播：来回滚动不闪
+    onEnter: () => tl.play(),
+  })
+  return total
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -235,28 +358,17 @@ export function initHover() {
 /* ──────────────────────────────────────────────────────────
  * 七、统一入口：扫描页面上带 data- 标记的元素并批量绑定
  *   data-reveal="card|text|up"          → 单个元素入场类型
- *   data-reveal-group                    → 卡片组容器（其直接子元素为卡片）
+ *   data-reveal-group                    → 卡片组容器（其直接子元素为卡片，legacy 编排）
+ *   data-reveal-group="fan"              → 同上，但走「由中心向两侧」新编排（见第四节 FAN）
  *   data-split                           → 文字拆字（标题）
  * ────────────────────────────────────────────────────────── */
 export function initScrollReveals() {
   // 1. data-split 标题：逐字遮罩升起
   document.querySelectorAll('[data-split]').forEach((el) => revealText(el))
 
-  // 2. 卡片组容器：子元素"从中心向两侧展开"
-  //    每组独立计算 centerIndex，不跨组
-  document.querySelectorAll('[data-reveal-group]').forEach((group) => {
-    // 收集直接子卡片：跳过本身也是 group 的嵌套容器（由内层自己管理，避免双重动画）
-    const cards = Array.from(group.children).filter(
-      (c) => c.dataset.reveal !== 'none' && !c.hasAttribute('data-reveal-group')
-    )
-    if (!cards.length) return
-    const total = cards.length
-    cards.forEach((card, i) => {
-      const delay = fanDelay(i, total)   // |i - (n-1)/2| × 0.12s
-      const fromX = fanFromX(i, total)   // 方向 × (60 + 层级×20)，中心为 0
-      revealCard(card, delay, fromX)
-    })
-  })
+  // 2. 卡片组容器：统一交给 revealCardGroup 编排（每组独立计算中心，不跨组）
+  //    该函数同时承担 legacy / fan 两套行为的分发，是本项目唯一的卡片组入口
+  document.querySelectorAll('[data-reveal-group]').forEach((group) => revealCardGroup(group))
 
   // 3. 独立元素入场（单个 data-reveal="card"，无组，默认纯上浮）
   document.querySelectorAll('[data-reveal="card"]').forEach((el) => revealCard(el, 0, 0))

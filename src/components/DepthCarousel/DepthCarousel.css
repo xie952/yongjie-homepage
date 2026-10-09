@@ -1,0 +1,130 @@
+/* ════════════════════════════════════════════════════════════
+   DepthCarousel —— React Bits 免费版样式内联（JS+CSS 变体）
+   来源：github.com/DavidHDev/react-bits → src/content/Components/DepthCarousel/DepthCarousel.css
+   改动：配色全部改读站内令牌（不写死第二套色值）；新增 .depth-carousel__glow（逐卡主题色光晕层）；
+        焦点描边由白色改为站内金色。几何/层级/交互相关规则一律保留。
+   ════════════════════════════════════════════════════════════ */
+.depth-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: var(--dc-perspective, 1400px);
+  perspective-origin: 50% 50%;
+  touch-action: pan-y;   /* 纵向手势留给页面滚动，横向手势给轮播拖拽 */
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+.depth-carousel:active { cursor: grabbing; }
+.depth-carousel:focus-visible {
+  outline: 1px solid rgba(212, 175, 88, .5);
+  outline-offset: 6px;
+  border-radius: 12px;
+}
+.depth-carousel__stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.depth-carousel__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow:
+    0 30px 60px -20px rgba(0, 0, 0, .65),
+    0 8px 20px -10px rgba(0, 0, 0, .5);
+  will-change: transform, opacity, filter;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+/* 渲染体填充（改造①：调用方把现有卡片组件塞进来，卡片自身负责内边距与排版） */
+.depth-carousel__card > .hero-card,
+.depth-carousel__card > .weapon-card {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.depth-carousel__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+/* 逐卡主题色光晕（改造②）：screen 混合，只在卡面上加一层同源色 sheen */
+.depth-carousel__glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  z-index: 2;
+}
+/* 景深雾（上游 tint 层，保留）：越靠后越暗 */
+.depth-carousel__tint {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  z-index: 3;
+}
+.depth-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3000;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(16, 15, 13, .6);
+  backdrop-filter: blur(8px);
+  color: var(--gold);
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .2s ease, color .2s ease;
+}
+.depth-carousel__arrow:hover { background: rgba(28, 24, 18, .9); border-color: rgba(212, 175, 88, .5); color: var(--gold-2); }
+.depth-carousel__arrow:active { transform: translateY(-50%) scale(.94); }
+.depth-carousel__arrow--prev { left: 16px; }
+.depth-carousel__arrow--next { right: 16px; }
+.depth-carousel__dots {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(14, 13, 11, .45);
+  backdrop-filter: blur(6px);
+}
+.depth-carousel__dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(232, 226, 212, .3);
+  cursor: pointer;
+  transition: width .25s ease, background .25s ease;
+}
+.depth-carousel__dot.is-active { width: 20px; background: var(--gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  .depth-carousel__card { will-change: auto; }
+  .depth-carousel__arrow, .depth-carousel__dot { transition: none; }
+}
